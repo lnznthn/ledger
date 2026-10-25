@@ -256,7 +256,7 @@ details.card[open]>summary{border-bottom:1px solid var(--line)}
 
 <script>
 'use strict';
-const VERSION = '1.3.0';
+const VERSION = '1.3.1';
 const TYPES = ['Outflows', 'Inflow', 'Transfer'];
 const TYPE_LABEL = { Outflows: 'Outflow', Inflow: 'Inflow', Transfer: 'Transfer' };
 const LS = { cfg: 'ledger.cfg', rows: 'ledger.rows', blocks: 'ledger.blocks', snap: 'ledger.snap', queue: 'ledger.queue', prefs: 'ledger.prefs' };
@@ -291,7 +291,8 @@ const $ = (s, el = document) => el.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const nf = new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const nf0 = new Intl.NumberFormat('en-PH', { maximumFractionDigits: 0 });
-const peso = (n, opt = {}) => n == null ? '—' : (n < -0.004 ? '−' : (opt.plus ? '+' : '')) + '₱' + (opt.round ? nf0 : nf).format(Math.abs(n));
+// finance style: negatives in parentheses, e.g. (₱1,200.00)
+const peso = (n, opt = {}) => { if (n == null) return '—'; const body = '₱' + (opt.round ? nf0 : nf).format(Math.abs(n)); return n < -0.004 ? '(' + body + ')' : (opt.plus ? '+' : '') + body; };
 const r2 = n => Math.round(n * 100) / 100;
 const clean = s => String(s || '').trim();
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
@@ -588,7 +589,7 @@ function acctRow(name, opts = {}) {
   const upd = opts.updated ? mdyToDate(opts.updated) : null;
   const stale = upd && (Date.now() - upd) / 864e5 > STALE_DAYS;
   const meta = [opts.rate ? opts.rate + ' p.a.' : '', opts.earmark ? peso(opts.earmark) + ' earmarked' : '', opts.updated ? 'updated ' + shortMDY(opts.updated) : '',
-    q ? `${q > 0 ? '+' : '−'}${peso(Math.abs(q))} queued` : ''].filter(Boolean);
+    q ? `${peso(q, { plus: true })} queued` : ''].filter(Boolean);
   return `<button class="row" data-acct="${esc(clean(name))}">
     <div class="grow"><div class="t">${esc(clean(name))}</div>
       ${meta.length || diff ? `<div class="s">${stale ? '<span class="stale"></span>' : ''}${esc(meta.join(' · '))}${diff ? `${meta.length ? ' · ' : ''}<span class="flag">Dashboard ${esc(peso(diff.sheet))}</span>` : ''}</div>` : ''}</div>
@@ -641,7 +642,7 @@ function renderBalances() {
     <button data-nca="1" style="text-align:left;display:block;width:100%">
       <div class="label">Net cash available${x.pend.length ? ' · incl. queued' : ''}</div>
       <div class="big ${nca < 0 ? 'neg' : ''}" style="margin-bottom:2px">${esc(peso(nca))}</div>
-      <div class="muted" style="font-size:13px;margin-bottom:14px">Net liquidity ${esc(peso(nl.live, { round: true }))} − allocated ${esc(peso(allocTotal, { round: true }))}</div>
+      <div class="muted" style="font-size:13px;margin-bottom:14px">Net liquidity ${esc(peso(nl.live, { round: true }))} less allocated ${esc(peso(allocTotal, { round: true }))}</div>
     </button>
     <div class="stats">
       <button data-nl="1" style="text-align:left"><div class="label">Net liquidity</div><div class="v ${nl.live < 0 ? 'neg' : ''}">${esc(peso(nl.live, { round: true }))}</div>
@@ -713,7 +714,7 @@ function openNetCash() {
   const allocTotal = alloc.total != null ? alloc.total : alloc.items.reduce((a, it) => a + it.value, 0);
   openSheet(`<h2>Net cash available</h2><p>Net liquidity minus cash you’ve allocated, the same rule as your Dashboard. Allocations come from the Dashboard’s Allocated Cash block.</p>
     <div class="kv"><span>Net liquidity</span><span class="num">${esc(peso(nl.live))}</span></div>
-    ${alloc.items.map(it => `<div class="kv"><span style="padding-left:12px">− ${esc(it.name)}</span><span class="num">${esc(peso(-it.value))}</span></div>`).join('')}
+    ${alloc.items.map(it => `<div class="kv"><span style="padding-left:12px">Less ${esc(it.name)}</span><span class="num">${esc(peso(-it.value))}</span></div>`).join('')}
     <div class="kv"><span><b>Net cash available</b></span><span class="num"><b>${esc(peso(r2(nl.live - allocTotal)))}</b></span></div>
     <div class="btns"><button class="secondary" id="sNL">Net liquidity breakdown</button><button class="secondary" id="closeS">Close</button></div>`);
   $('#sNL').onclick = openNetLiquidity;
@@ -767,9 +768,9 @@ function rowMatches(r, f) {
   return true;
 }
 function amountView(r, acct) {
-  if (acct) { const into = clean(r.dest) === acct; return { cls: into ? 'in' : '', txt: (into ? '+' : '−') + peso(r.amount) }; }
+  if (acct) { const into = clean(r.dest) === acct; return { cls: into ? 'in' : '', txt: into ? peso(r.amount, { plus: true }) : peso(-r.amount) }; }
   if (r.type === 'Inflow') return { cls: 'in', txt: peso(r.amount, { plus: true }) };
-  if (r.type === 'Outflows') return { cls: '', txt: '−' + peso(r.amount) };
+  if (r.type === 'Outflows') return { cls: '', txt: peso(-r.amount) };
   return { cls: 'tr', txt: peso(r.amount) };
 }
 function renderActivity() {
