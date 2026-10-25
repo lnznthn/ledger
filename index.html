@@ -1,0 +1,926 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Ledger">
+<meta name="theme-color" content="#0d1210">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" href="icons/icon-192.png">
+<title>Ledger</title>
+<style>
+:root{
+  --bg:#f4f2ee; --card:#ffffff; --ink:#17201c; --muted:#6b746f; --faint:#9aa29d; --line:#e4e1da;
+  --chip:#ece9e2; --accent:#1f7a5a; --accent-ink:#ffffff; --accent-soft:#dcefe6;
+  --in:#1f8a5c; --neg:#c0463b; --warn:#b7791f; --shadow:0 1px 2px rgba(20,30,25,.06),0 4px 14px rgba(20,30,25,.05);
+  --c1:#1f7a5a; --c2:#3f8fc9; --c3:#c98a2e; --c4:#8a63c9; --c5:#c9584a; --c6:#5aa3a0;
+  --safe-t:env(safe-area-inset-top); --safe-b:env(safe-area-inset-bottom);
+  --num:ui-rounded,"SF Pro Rounded",-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0d1210; --card:#151c19; --ink:#e8ece9; --muted:#8b958f; --faint:#5f6964; --line:#232c28;
+    --chip:#1d2622; --accent:#3fbf8f; --accent-ink:#06130d; --accent-soft:#16352a;
+    --in:#4fd39c; --neg:#ef7b70; --warn:#e3a948; --shadow:none;
+    --c1:#3fbf8f; --c2:#5ea9e0; --c3:#e0a64c; --c4:#a588e0; --c5:#e07a6c; --c6:#6cc0bc;
+  }
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--ink);font:16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;overscroll-behavior-y:none}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+input,select,textarea{font:inherit;color:inherit}
+.num{font-family:var(--num);font-variant-numeric:tabular-nums}
+
+/* header */
+header{position:fixed;inset:0 0 auto 0;z-index:20;padding:calc(var(--safe-t) + 10px) 16px 10px;
+  background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:saturate(1.4) blur(14px);-webkit-backdrop-filter:saturate(1.4) blur(14px);
+  display:flex;align-items:center;gap:10px;border-bottom:1px solid transparent}
+header.scrolled{border-bottom-color:var(--line)}
+header h1{font-size:22px;font-weight:700;letter-spacing:-.01em;margin:0;flex:1}
+.pill{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);background:var(--chip);border-radius:999px;padding:6px 11px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--faint)}
+.dot.ok{background:var(--in)} .dot.warn{background:var(--warn)} .dot.err{background:var(--neg)}
+.dot.spin{background:var(--accent);animation:pulse 1s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.25}}
+.iconbtn{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:var(--chip);color:var(--muted)}
+.iconbtn svg{width:18px;height:18px}
+
+main{padding:calc(var(--safe-t) + 64px) 16px calc(var(--safe-b) + 92px);max-width:560px;margin:0 auto}
+.view{display:none} .view.on{display:block}
+
+/* tab bar */
+nav{position:fixed;inset:auto 0 0 0;z-index:20;display:flex;justify-content:space-around;
+  padding:8px 6px calc(var(--safe-b) + 6px);background:color-mix(in srgb,var(--card) 92%,transparent);
+  backdrop-filter:saturate(1.4) blur(14px);-webkit-backdrop-filter:saturate(1.4) blur(14px);border-top:1px solid var(--line)}
+nav button{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;font-weight:500;color:var(--faint);padding:4px 0}
+nav button svg{width:24px;height:24px}
+nav button.on{color:var(--accent)}
+.badge{position:absolute;margin-left:22px;margin-top:-4px;min-width:16px;height:16px;border-radius:8px;background:var(--warn);color:#fff;font-size:10px;font-weight:700;display:grid;place-items:center;padding:0 4px}
+
+/* cards & generic */
+.card{background:var(--card);border-radius:16px;box-shadow:var(--shadow);border:1px solid var(--line);margin-bottom:12px}
+.pad{padding:16px}
+.label{font-size:13px;color:var(--muted);font-weight:500}
+.muted{color:var(--muted)} .faint{color:var(--faint)}
+.empty{text-align:center;color:var(--muted);padding:48px 16px;font-size:15px}
+.banner{border-radius:12px;padding:12px 14px;font-size:14px;margin-bottom:12px;background:color-mix(in srgb,var(--neg) 14%,var(--card));color:var(--ink);border:1px solid color-mix(in srgb,var(--neg) 35%,transparent)}
+.banner.warn{background:color-mix(in srgb,var(--warn) 14%,var(--card));border-color:color-mix(in srgb,var(--warn) 35%,transparent)}
+
+/* add form */
+.amount{display:flex;align-items:baseline;gap:6px;padding:18px 16px 14px}
+.amount span{font-family:var(--num);font-size:30px;color:var(--faint);font-weight:600}
+.amount input{flex:1;min-width:0;border:0;outline:0;background:transparent;font-family:var(--num);font-size:44px;font-weight:650;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.amount input::placeholder{color:var(--faint)}
+.seg{display:flex;background:var(--chip);border-radius:12px;padding:3px;margin:0 16px 14px}
+.seg button{flex:1;padding:9px 0;border-radius:9px;font-size:15px;font-weight:600;color:var(--muted)}
+.seg button.on{background:var(--card);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.field{border-top:1px solid var(--line);padding:12px 16px}
+.field>.label{display:block;margin-bottom:6px}
+.field input[type=text],.field input[type=date],.field select{width:100%;border:0;outline:0;background:transparent;font-size:17px;padding:4px 0}
+.field select{-webkit-appearance:none;appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--faint) 50%),linear-gradient(135deg,var(--faint) 50%,transparent 50%);
+  background-position:calc(100% - 12px) 55%,calc(100% - 7px) 55%;background-size:5px 5px;background-repeat:no-repeat;padding-right:24px}
+.field input[type=date]{min-height:28px}
+.chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:2px -16px 6px;padding:0 16px}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;font-size:13px;font-weight:500;padding:6px 11px;border-radius:999px;background:var(--chip);color:var(--muted);white-space:nowrap}
+.chip.on{background:var(--accent-soft);color:var(--accent)}
+.daterow{display:flex;align-items:center;gap:8px}
+.daterow input{flex:1}
+.sugg{margin:6px -16px -12px;border-top:1px solid var(--line)}
+.sugg button{display:block;width:100%;text-align:left;padding:10px 16px;border-bottom:1px solid var(--line)}
+.sugg button:last-child{border-bottom:0}
+.sugg b{font-weight:600;display:block;font-size:15px}
+.sugg small{color:var(--muted);font-size:12.5px}
+.primary{display:block;width:100%;padding:15px;border-radius:14px;background:var(--accent);color:var(--accent-ink);font-size:17px;font-weight:650}
+.primary:disabled{opacity:.45}
+.secondary{display:block;width:100%;padding:13px;border-radius:14px;background:var(--chip);font-size:16px;font-weight:600}
+.hint{font-size:13px;color:var(--muted);text-align:center;margin:10px 0 18px}
+.qitem{display:flex;gap:10px;align-items:flex-start;padding:12px 16px;border-top:1px solid var(--line)}
+.qitem:first-child{border-top:0}
+.qitem .grow{flex:1;min-width:0}
+.qitem .err{color:var(--neg);font-size:13px;margin-top:2px}
+.qitem .acts{display:flex;gap:6px;margin-top:8px}
+.qitem .acts button{font-size:13px;font-weight:600;padding:5px 10px;border-radius:8px;background:var(--chip)}
+
+/* lists */
+.row{display:flex;align-items:center;gap:12px;padding:11px 16px;border-top:1px solid var(--line);width:100%;text-align:left}
+.row:first-child{border-top:0}
+.row .grow{flex:1;min-width:0}
+.row .t{font-size:15.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .s{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .v{font-family:var(--num);font-variant-numeric:tabular-nums;font-weight:600;font-size:15.5px;white-space:nowrap;text-align:right}
+.v.in{color:var(--in)} .v.neg{color:var(--neg)} .v.tr{color:var(--muted)}
+.stale{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--warn);margin-right:5px;vertical-align:1px}
+.pending{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--warn);margin-right:6px}
+.dayhead{display:flex;justify-content:space-between;font-size:13px;font-weight:600;color:var(--muted);padding:18px 4px 6px}
+.search{display:flex;align-items:center;gap:8px;background:var(--chip);border-radius:12px;padding:9px 12px;margin-bottom:10px}
+.search svg{width:17px;height:17px;color:var(--faint);flex:none}
+.search input{flex:1;border:0;outline:0;background:transparent;font-size:16px;min-width:0}
+details.card>summary{list-style:none;display:flex;align-items:center;gap:10px;padding:14px 16px;cursor:pointer}
+details.card>summary::-webkit-details-marker{display:none}
+details.card>summary .grow{flex:1;font-weight:650;font-size:16px}
+details.card>summary .chev{width:14px;height:14px;color:var(--faint);transition:transform .2s}
+details.card[open]>summary .chev{transform:rotate(90deg)}
+details.card[open]>summary{border-bottom:1px solid var(--line)}
+
+/* balances */
+.hero{padding:18px 16px 16px}
+.hero .big{font-family:var(--num);font-size:36px;font-weight:700;letter-spacing:-.02em;margin:2px 0 14px;font-variant-numeric:tabular-nums}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px}
+.stats .v{font-family:var(--num);font-weight:650;font-size:17px;font-variant-numeric:tabular-nums}
+.stack{display:flex;height:10px;border-radius:5px;overflow:hidden;margin:16px 0 10px;gap:2px}
+.stack button{height:100%;padding:0;border-radius:2px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12.5px;color:var(--muted)}
+.legend button{display:flex;align-items:center;gap:5px;font-size:12.5px}
+.legend i{width:8px;height:8px;border-radius:2px;display:inline-block}
+.legend button.on{color:var(--ink);font-weight:600}
+.bar{height:6px;border-radius:3px;background:var(--chip);overflow:hidden;margin-top:6px}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:3px}
+.sectiontitle{font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:22px 4px 8px}
+
+/* sheet + toast */
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:40;opacity:0;pointer-events:none;transition:opacity .2s}
+.scrim.on{opacity:1;pointer-events:auto}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:41;background:var(--card);border-radius:20px 20px 0 0;max-height:90vh;overflow:auto;
+  padding:8px 16px calc(var(--safe-b) + 20px);transform:translateY(105%);visibility:hidden;transition:transform .25s cubic-bezier(.2,.8,.2,1),visibility 0s linear .25s;max-width:560px;margin:0 auto}
+.sheet.on{transform:none;visibility:visible;transition:transform .25s cubic-bezier(.2,.8,.2,1)}
+.grab{width:38px;height:5px;border-radius:3px;background:var(--line);margin:4px auto 14px}
+.sheet h2{font-size:20px;margin:0 0 4px}
+.sheet .kv{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line);font-size:15px}
+.sheet .kv span:first-child{color:var(--muted)}
+.sheet .kv span:last-child{text-align:right}
+.sheet .btns{display:grid;gap:8px;margin-top:16px}
+.sheet label{display:block;margin:12px 0 6px}
+.sheet input.txt{width:100%;padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);font-size:16px;outline:0}
+.sheet input.txt:focus{border-color:var(--accent)}
+.sheet p{font-size:14.5px;color:var(--muted);margin:6px 0}
+.toast{position:fixed;left:50%;top:calc(var(--safe-t) + 62px);transform:translate(-50%,-12px);z-index:50;background:var(--ink);color:var(--bg);
+  padding:10px 16px;border-radius:12px;font-size:14.5px;font-weight:500;opacity:0;pointer-events:none;transition:all .25s;max-width:88vw;text-align:center}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+.toast.err{background:var(--neg);color:#fff}
+.recon{display:flex;align-items:center;gap:8px;font-size:13.5px;color:var(--muted);padding:2px 4px 12px}
+.recon i{width:8px;height:8px;border-radius:50%;background:var(--in);flex:none}
+.recon.bad i{background:var(--warn)}
+.diffrow{padding:10px 16px;border-top:1px solid var(--line);font-size:14px}
+.diffrow b{font-weight:600}
+.flag{color:var(--warn);font-weight:600}
+</style>
+</head>
+<body>
+
+<header id="hdr">
+  <h1 id="title">Add</h1>
+  <button class="pill" id="status" aria-label="Sync now"><span class="dot" id="statusDot"></span><span id="statusText">…</span></button>
+  <button class="iconbtn" id="gear" aria-label="Settings">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+  </button>
+</header>
+
+<main>
+  <!-- ADD -->
+  <section class="view" id="v-add">
+    <div id="addBanner"></div>
+    <div class="card">
+      <label class="amount"><span>₱</span><input id="amt" inputmode="decimal" placeholder="0.00" autocomplete="off" aria-label="Amount"></label>
+      <div class="seg" id="typeSeg">
+        <button data-type="Outflows">Outflow</button>
+        <button data-type="Inflow">Inflow</button>
+        <button data-type="Transfer">Transfer</button>
+      </div>
+      <div class="field">
+        <span class="label">Description</span>
+        <input type="text" id="desc" placeholder="e.g. 7-Eleven Sampaloc" autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="words">
+        <div class="sugg" id="sugg" hidden></div>
+      </div>
+      <div class="field">
+        <span class="label" id="srcLabel">From</span>
+        <div class="chips" id="srcChips"></div>
+        <select id="src"></select>
+        <div class="s muted" id="srcBal" style="font-size:13px;margin-top:2px"></div>
+      </div>
+      <div class="field">
+        <span class="label" id="dstLabel">To</span>
+        <div class="chips" id="dstChips"></div>
+        <select id="dst"></select>
+      </div>
+      <div class="field">
+        <span class="label">Date</span>
+        <div class="daterow">
+          <input type="date" id="date">
+          <button class="chip" data-day="0">Today</button>
+          <button class="chip" data-day="-1">Yesterday</button>
+        </div>
+      </div>
+    </div>
+    <button class="primary" id="save">Save</button>
+    <p class="hint" id="saveHint">Saved on this phone first, then added to the Transactions tab on the next sync.</p>
+    <div id="queueWrap"></div>
+  </section>
+
+  <!-- BALANCES -->
+  <section class="view" id="v-bal"></section>
+
+  <!-- ACTIVITY -->
+  <section class="view" id="v-act">
+    <div class="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" type="search" placeholder="Search description, account, amount" autocomplete="off" autocorrect="off" spellcheck="false">
+    </div>
+    <div class="chips" id="actChips" style="margin-bottom:2px"></div>
+    <div id="actList"></div>
+  </section>
+
+  <!-- RECEIVABLES -->
+  <section class="view" id="v-rec"></section>
+</main>
+
+<nav id="tabs">
+  <button data-tab="add"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>Add<span class="badge" id="qBadge" hidden></span></button>
+  <button data-tab="bal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="14" rx="3"/><path d="M3 10h18M16 15h2"/><path d="M6 6V5a2 2 0 0 1 2-2h8"/></svg>Balances</button>
+  <button data-tab="act"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg>Activity</button>
+  <button data-tab="rec"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><path d="M17 4.5a3.5 3.5 0 0 1 0 7M22 21a6 6 0 0 0-4-5.6"/></svg>Owed</button>
+</nav>
+
+<div class="scrim" id="scrim"></div>
+<div class="sheet" id="sheet"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+const VERSION = '1.1.0';
+const TYPES = ['Outflows', 'Inflow', 'Transfer'];
+const TYPE_LABEL = { Outflows: 'Outflow', Inflow: 'Inflow', Transfer: 'Transfer' };
+const LS = { cfg: 'ledger.cfg', rows: 'ledger.rows', blocks: 'ledger.blocks', snap: 'ledger.snap', queue: 'ledger.queue', prefs: 'ledger.prefs' };
+const TITLES = { add: 'Add', bal: 'Balances', act: 'Activity', rec: 'Owed to you' };
+const STALE_DAYS = 21;
+const TOL = 1;                                   // Dashboard shows ₱0 for wallet balances of ₱1 or less
+const RECEIVABLE_ACCTS = ['Lending Receivables', 'Other Receivables'];
+const SHEET_ONLY = /allocated|receivable/i;      // Dashboard groups the app can't derive from the log
+const EARMARK = /restricted/i;
+
+/* ---------- storage ---------- */
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { toast('Phone storage is full. Clear cached data in Settings.', 'err'); return false; } },
+  del(k) { try { localStorage.removeItem(k); } catch (e) {} },
+};
+store.del('ledger.cache'); // v1.0 format
+let cfg = store.get(LS.cfg, null);
+let rows = store.get(LS.rows, []);       // full Transactions log, ascending by sheet row
+let blocks = store.get(LS.blocks, {});   // { blockStartRow: hash } from the last sync
+let snap = store.get(LS.snap, null);     // { options, dashboard, bufferRows, syncedAt, lastRow }
+let queue = store.get(LS.queue, []);     // entries logged here and not yet confirmed by the sheet
+let prefs = Object.assign({ lastSrc: {}, lastDst: {}, tab: 'add', closed: {} }, store.get(LS.prefs, {}));
+const saveQueue = () => { store.set(LS.queue, queue); dirty(); };
+const savePrefs = () => store.set(LS.prefs, prefs);
+
+const state = { tab: prefs.tab, type: 'Outflows', syncing: false, flushing: false, flushError: false, lastError: null,
+  filter: { q: '', type: 'All', account: null }, highlight: null, shownRows: [] };
+
+/* ---------- helpers ---------- */
+const $ = (s, el = document) => el.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const nf = new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const nf0 = new Intl.NumberFormat('en-PH', { maximumFractionDigits: 0 });
+const peso = (n, opt = {}) => n == null ? '—' : (n < -0.004 ? '−' : (opt.plus ? '+' : '')) + '₱' + (opt.round ? nf0 : nf).format(Math.abs(n));
+const r2 = n => Math.round(n * 100) / 100;
+const clean = s => String(s || '').trim();
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
+function isoDay(offset = 0) { const d = new Date(); d.setDate(d.getDate() + offset); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); }
+function parseISO(s) { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s || ''); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; }
+function dayLabel(s) {
+  const d = parseISO(s); if (!d) return s;
+  if (s === isoDay(0)) return 'Today'; if (s === isoDay(-1)) return 'Yesterday';
+  const opt = { weekday: 'short', month: 'short', day: 'numeric' };
+  if (d.getFullYear() !== new Date().getFullYear()) opt.year = 'numeric';
+  return d.toLocaleDateString('en-US', opt);
+}
+function sheetDate(s) { const d = parseISO(s); return d ? `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}/${String(d.getFullYear()).slice(2)}` : s; }
+function mdyToDate(s) { const m = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/.exec(s || ''); if (!m) return null; let y = +m[3]; if (y < 100) y += 2000; return new Date(y, +m[1] - 1, +m[2]); }
+function shortMDY(s) { const d = mdyToDate(s); return d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: d.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined }) : s; }
+function rel(iso) {
+  const ms = Date.now() - Date.parse(iso); if (!isFinite(ms)) return '';
+  const m = Math.round(ms / 60000); if (m < 1) return 'just now'; if (m < 60) return m + 'm ago';
+  const h = Math.round(m / 60); if (h < 24) return h + 'h ago'; return Math.round(h / 24) + 'd ago';
+}
+function parseAmount(s) { const n = Number(String(s).replace(/[₱,\s]/g, '')); return isFinite(n) ? r2(n) : NaN; }
+let toastTimer;
+function toast(msg, kind) { const t = $('#toast'); t.textContent = msg; t.className = 'toast on' + (kind === 'err' ? ' err' : ''); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.className = 'toast', 2800); }
+
+/* ---------- options from the Data tab ---------- */
+const optMap = () => (snap && snap.options && snap.options.map) || {};
+const RETIRED = new Set(['Reimbursement']);     // still in the Data tab, no longer logged
+const sourcesFor = type => Object.keys(optMap()[type] || {}).filter(s => !RETIRED.has(clean(s))).sort((a, b) => clean(a).localeCompare(clean(b)));
+const destsFor = (type, src) => ((optMap()[type] || {})[src] || []).slice().sort((a, b) => clean(a).localeCompare(clean(b)));
+
+/* ---------- the app's own ledger math ---------- */
+let D = null;
+function dirty() { D = null; }
+function derived() {
+  if (D) return D;
+  const map = optMap();
+  const accounts = new Set();
+  Object.keys(map.Outflows || {}).forEach(s => accounts.add(clean(s)));
+  Object.entries(map.Transfer || {}).forEach(([s, ds]) => { accounts.add(clean(s)); ds.forEach(d => accounts.add(clean(d))); });
+  Object.values(map.Inflow || {}).forEach(ds => ds.forEach(d => accounts.add(clean(d))));
+
+  // Same rule as the Dashboard: Σ amount where the name is Destination − Σ amount where it is Source
+  const apply = (bal, r, sign = 1) => {
+    const a = (Number(r.amount) || 0) * sign;
+    const d = clean(r.dest), s = clean(r.source);
+    bal[d] = (bal[d] || 0) + a; bal[s] = (bal[s] || 0) - a;
+  };
+  const synced = {}; rows.forEach(r => apply(synced, r));
+  const live = Object.assign({}, synced);
+  const pend = queue.filter(e => e.status !== 'failed');
+  pend.forEach(e => apply(live, e));
+
+  // receivables per person: description-level net of Lending/Other Receivables movements
+  const recv = {};
+  const recSet = new Set(RECEIVABLE_ACCTS);
+  rows.concat(pend).forEach(r => {
+    const name = clean(r.desc), a = Number(r.amount) || 0;
+    if (recSet.has(clean(r.dest))) recv[name] = (recv[name] || 0) + a;
+    if (recSet.has(clean(r.source))) recv[name] = (recv[name] || 0) - a;
+  });
+
+  // this month's spending by category (Outflows into a non-account destination)
+  const ym = isoDay(0).slice(0, 7);
+  const cats = {}; let monthTotal = 0;
+  rows.concat(pend).forEach(r => {
+    if (r.type !== 'Outflows' || !String(r.date).startsWith(ym) || accounts.has(clean(r.dest))) return;
+    cats[clean(r.dest)] = (cats[clean(r.dest)] || 0) + (Number(r.amount) || 0); monthTotal += Number(r.amount) || 0;
+  });
+
+  // description templates (most recent use wins)
+  const tpl = {};
+  rows.slice(-3000).forEach(r => {
+    const k = clean(r.desc).toLowerCase(); if (!k) return;
+    const t = tpl[k] || (tpl[k] = { desc: clean(r.desc), n: 0 });
+    t.n++; t.type = r.type; t.source = r.source; t.dest = r.dest; t.amount = r.amount; t.last = r.date;
+  });
+  const templates = Object.values(tpl).sort((a, b) => b.n - a.n || (a.last < b.last ? 1 : -1));
+
+  // usage frequency over the last ~400 rows, for quick-pick chips
+  const freqS = {}, freqD = {};
+  rows.slice(-400).forEach(r => {
+    freqS[r.type] = freqS[r.type] || {}; freqS[r.type][r.source] = (freqS[r.type][r.source] || 0) + 1;
+    const k = r.type + '|' + r.source; freqD[k] = freqD[k] || {}; freqD[k][r.dest] = (freqD[k][r.dest] || 0) + 1;
+    freqD[r.type] = freqD[r.type] || {}; freqD[r.type][r.dest] = (freqD[r.type][r.dest] || 0) + 0.1;
+  });
+
+  // reconcile: log-derived balance vs the sum of that name's Dashboard cells
+  const dash = (snap && snap.dashboard) || { groups: [] };
+  const sheetBy = {};
+  dash.groups.forEach(g => { if (SHEET_ONLY.test(g.label)) return; g.items.forEach(it => { sheetBy[clean(it.name)] = (sheetBy[clean(it.name)] || 0) + it.value; }); });
+  const diffs = Object.keys(sheetBy).map(n => ({ name: n, app: r2(synced[n] || 0), sheet: r2(sheetBy[n]), diff: r2((synced[n] || 0) - sheetBy[n]) }))
+    .filter(x => Math.abs(x.diff) > TOL && !(x.sheet === 0 && Math.abs(x.app) <= TOL));
+  const dashRec = dash.groups.find(g => /receivable/i.test(g.label));
+  const recDiffs = dashRec ? dashRec.items.map(it => ({ name: clean(it.name), app: r2(recv[clean(it.name)] || 0), sheet: r2(it.value) }))
+    .filter(x => Math.abs(x.app - x.sheet) > TOL) : [];
+
+  D = { accounts, synced, live, pend, recv, cats, monthTotal, ym, templates, freqS, freqD, sheetBy, diffs, dashRec, recDiffs, checked: Object.keys(sheetBy).length };
+  return D;
+}
+const bal = name => r2(derived().live[clean(name)] || 0);
+const queuedDelta = name => r2((derived().live[clean(name)] || 0) - (derived().synced[clean(name)] || 0));
+function topN(counter, n) { return Object.entries(counter || {}).sort((a, b) => b[1] - a[1]).slice(0, n).map(x => x[0]); }
+function freqSources(type) { const valid = new Set(sourcesFor(type)); return topN(derived().freqS[type], 10).filter(s => valid.has(s)).slice(0, 4); }
+function freqDests(type, src) {
+  const valid = new Set(destsFor(type, src));
+  const a = topN(derived().freqD[type + '|' + src], 10).filter(d => valid.has(d));
+  const b = topN(derived().freqD[type], 12).filter(d => valid.has(d) && !a.includes(d));
+  return a.concat(b).slice(0, 5);
+}
+
+/* ---------- sync with the sheet ---------- */
+async function api(action, payload = {}, conf = cfg) {
+  if (!conf || !conf.url) throw Object.assign(new Error('Not connected'), { setup: true });
+  const ctl = new AbortController(); const timer = setTimeout(() => ctl.abort(), 60000);
+  let res;
+  try {
+    res = await fetch(conf.url, {
+      method: 'POST', redirect: 'follow', cache: 'no-store', signal: ctl.signal,
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(Object.assign({ key: conf.key, action }, payload)),
+    });
+  } catch (e) {
+    throw Object.assign(new Error(e.name === 'AbortError' ? 'The sheet took too long to answer' : 'No connection to the sheet'), { network: true });
+  } finally { clearTimeout(timer); }
+  const text = await res.text();
+  let j; try { j = JSON.parse(text); } catch (e) {
+    throw new Error('Got a web page instead of data. Check the deployment is set to "Anyone" and the URL ends in /exec.');
+  }
+  if (!j.ok) throw Object.assign(new Error(j.error || 'Sheet error'), { auth: j.auth === false, server: true });
+  return j.data;
+}
+
+/** Merge a sync payload: replace rows in changed blocks, drop rows past the sheet's last row. */
+function applySync(d) {
+  const changed = d.blocks.filter(b => blocks[b.s] !== b.h);
+  const inChanged = r => changed.some(b => r.row >= b.s && r.row <= b.e);
+  rows = rows.filter(r => r.row <= d.lastRow && !inChanged(r)).concat(d.rows).sort((a, b) => a.row - b.row);
+  blocks = {}; d.blocks.forEach(b => blocks[b.s] = b.h);
+  snap = { options: d.options, dashboard: d.dashboard, bufferRows: d.bufferRows, syncedAt: d.syncedAt, lastRow: d.lastRow, pulled: d.rows.length };
+  const ok = store.set(LS.rows, rows) && store.set(LS.blocks, blocks);
+  if (!ok) blocks = {};               // force a full re-pull next time rather than trust a partial save
+  store.set(LS.snap, snap);
+  dirty();
+}
+
+async function sync() {
+  if (!cfg || state.syncing) return;
+  if (!navigator.onLine) { renderStatus(); return; }
+  state.syncing = true; renderStatus();
+  try {
+    if (queue.some(e => e.status !== 'failed')) await flush(true);
+    else { applySync(await api('sync', { have: blocks })); state.lastError = null; }
+  } catch (e) { onError(e); }
+  finally { state.syncing = false; renderAll(); }
+}
+
+async function flush(fromSync) {
+  if (!cfg || state.flushing) return;
+  const pending = queue.filter(e => e.status !== 'failed');
+  if (!pending.length) return;
+  if (!navigator.onLine) { renderStatus(); return; }
+  state.flushing = true; state.flushError = false; renderStatus();
+  try {
+    const data = await api('add', { entries: pending.map(({ status, error, ...e }) => e), have: blocks });
+    const byId = {}; data.results.forEach(r => byId[r.id] = r);
+    let sent = 0, failed = 0;
+    queue = queue.filter(e => {
+      const r = byId[e.id]; if (!r) return true;
+      if (r.ok) { sent++; return false; }
+      e.status = 'failed'; e.error = r.error; failed++; return true;
+    });
+    applySync(data.sync); saveQueue(); state.lastError = null;
+    if (failed) toast(failed === 1 ? '1 entry was rejected. See the Add tab.' : failed + ' entries were rejected. See the Add tab.', 'err');
+    else if (sent) toast(sent === 1 ? 'Logged to your sheet' : sent + ' rows logged to your sheet');
+  } catch (e) { state.flushError = true; onError(e); }
+  finally { state.flushing = false; if (!fromSync) renderAll(); }
+}
+
+function onError(e) {
+  state.lastError = e.message;
+  if (e.auth) { toast('The key was rejected', 'err'); openSettings('The sheet rejected the key. Run showKey() in the script editor and paste the current key.'); return; }
+  if (!e.network) toast(e.message, 'err');
+}
+
+/* ---------- status pill ---------- */
+function renderStatus() {
+  const dot = $('#statusDot'), txt = $('#statusText');
+  const pend = queue.filter(e => e.status !== 'failed').length, fail = queue.length - pend;
+  let cls = '', t = '';
+  if (!cfg) { cls = 'warn'; t = 'Not connected'; }
+  else if (state.syncing || state.flushing) { cls = 'spin'; t = 'Syncing'; }
+  else if (fail) { cls = 'err'; t = fail + ' rejected'; }
+  else if (pend && !navigator.onLine) { cls = 'warn'; t = pend + ' queued · offline'; }
+  else if (pend) { cls = 'warn'; t = pend + ' queued'; }
+  else if (!navigator.onLine) { cls = 'warn'; t = 'Offline'; }
+  else if (state.lastError) { cls = 'err'; t = 'Sync failed'; }
+  else if (snap && snap.syncedAt) { cls = 'ok'; t = rel(snap.syncedAt); }
+  else { t = 'Tap to sync'; }
+  dot.className = 'dot ' + cls; txt.textContent = t;
+  const b = $('#qBadge'); b.hidden = !queue.length; b.textContent = queue.length;
+}
+
+/* ---------- Add ---------- */
+function fillSelect(sel, items, value, placeholder) {
+  sel.innerHTML = (placeholder ? `<option value="" disabled>${esc(placeholder)}</option>` : '') +
+    items.map(v => `<option value="${esc(v)}">${esc(clean(v))}</option>`).join('');
+  sel.value = items.includes(value) ? value : (items[0] || '');
+}
+function renderType() {
+  document.querySelectorAll('#typeSeg button').forEach(b => b.classList.toggle('on', b.dataset.type === state.type));
+  $('#srcLabel').textContent = state.type === 'Inflow' ? 'Income from' : 'From';
+  $('#dstLabel').textContent = state.type === 'Inflow' ? 'Into' : state.type === 'Outflows' ? 'Category' : 'To';
+}
+function renderSrcBal() {
+  const s = $('#src').value, el = $('#srcBal');
+  el.textContent = s && derived().accounts.has(clean(s)) ? 'Balance ' + peso(bal(s)) : '';
+}
+function renderSources(keep) {
+  const sel = $('#src'); const list = sourcesFor(state.type);
+  const want = keep && list.includes(keep) ? keep : (prefs.lastSrc[state.type] || freqSources(state.type)[0]);
+  fillSelect(sel, list, want, list.length ? null : 'Sync to load accounts');
+  const chips = freqSources(state.type);
+  $('#srcChips').innerHTML = chips.map(s => `<button class="chip${s === sel.value ? ' on' : ''}" data-v="${esc(s)}">${esc(clean(s))}</button>`).join('');
+  $('#srcChips').hidden = !chips.length;
+  renderSrcBal();
+}
+function renderDests(keep) {
+  const sel = $('#dst'); const src = $('#src').value; const list = destsFor(state.type, src);
+  const want = keep && list.includes(keep) ? keep : (prefs.lastDst[state.type + '|' + src] || freqDests(state.type, src)[0]);
+  fillSelect(sel, list, want, list.length ? null : '—');
+  const chips = freqDests(state.type, src);
+  $('#dstChips').innerHTML = chips.map(s => `<button class="chip${s === sel.value ? ' on' : ''}" data-v="${esc(s)}">${esc(clean(s))}</button>`).join('');
+  $('#dstChips').hidden = !chips.length;
+}
+function markChips(box, val) { box.querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c.dataset.v === val)); }
+function renderAddForm(keepSrc, keepDst) {
+  renderType(); renderSources(keepSrc || $('#src').value); renderDests(keepDst || $('#dst').value);
+  if (!$('#date').value) $('#date').value = isoDay(0);
+  markDateChips();
+}
+function markDateChips() { document.querySelectorAll('[data-day]').forEach(c => c.classList.toggle('on', $('#date').value === isoDay(+c.dataset.day))); }
+
+function renderSuggestions() {
+  const box = $('#sugg'); const q = clean($('#desc').value).toLowerCase();
+  const tpl = derived().templates;
+  if (!q || document.activeElement !== $('#desc')) { box.hidden = true; return; }
+  const starts = [], contains = [];
+  for (let i = 0; i < tpl.length && starts.length < 5; i++) {
+    const d = tpl[i].desc.toLowerCase();
+    if (d === q) continue;
+    if (d.startsWith(q)) starts.push(i); else if (contains.length < 5 && d.includes(q)) contains.push(i);
+  }
+  const list = starts.concat(contains).slice(0, 5);
+  if (!list.length) { box.hidden = true; return; }
+  box.innerHTML = list.map(i => { const t = tpl[i]; return `<button data-i="${i}"><b>${esc(t.desc)}</b>
+    <small>${esc(TYPE_LABEL[t.type] || t.type)} · ${esc(clean(t.source))} → ${esc(clean(t.dest))} · last ${esc(peso(t.amount))}</small></button>`; }).join('');
+  box.hidden = false;
+}
+function applyTemplate(t) {
+  $('#desc').value = t.desc;
+  if (TYPES.includes(t.type)) state.type = t.type;
+  renderAddForm(t.source, t.dest);
+  $('#sugg').hidden = true;
+}
+
+function renderQueue() {
+  const wrap = $('#queueWrap');
+  if (!queue.length) { wrap.innerHTML = ''; return; }
+  wrap.innerHTML = `<div class="sectiontitle">Waiting to reach the sheet</div><div class="card">` + queue.map(e => `
+    <div class="qitem">
+      <div class="grow">
+        <div style="font-weight:600">${esc(e.desc)}</div>
+        <div class="muted" style="font-size:13px">${esc(dayLabel(e.date))} · ${esc(clean(e.source))} → ${esc(clean(e.dest))}</div>
+        ${e.status === 'failed' ? `<div class="err">${esc(e.error || 'Rejected')}</div>` : `<div class="faint" style="font-size:12.5px;margin-top:2px">${navigator.onLine ? 'Sending' : 'Sends when you’re back online'}</div>`}
+        ${e.status === 'failed' ? `<div class="acts"><button data-q="edit" data-id="${e.id}">Edit</button><button data-q="retry" data-id="${e.id}">Retry</button><button data-q="del" data-id="${e.id}">Delete</button></div>` : ''}
+      </div>
+      <div class="num" style="font-weight:600">${esc(peso(e.amount))}</div>
+    </div>`).join('') + `</div>`;
+}
+
+function renderAddBanner() {
+  const el = $('#addBanner'); const parts = [];
+  if (snap && snap.bufferRows != null && snap.bufferRows < 40)
+    parts.push(`<div class="banner warn">Only ${snap.bufferRows} blank rows are left in Transactions above the placeholder rows at the bottom. Insert more blank rows there soon.</div>`);
+  if (cfg && !snap) parts.push(`<div class="banner warn">Your accounts haven’t loaded yet. Tap the status pill at the top to sync.</div>`);
+  el.innerHTML = parts.join('');
+}
+
+/* ---------- Balances ---------- */
+const chev = () => `<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>`;
+function acctRow(name, opts = {}) {
+  const x = derived(); const v = bal(name); const q = queuedDelta(name);
+  const diff = x.diffs.find(d => d.name === clean(name));
+  const upd = opts.updated ? mdyToDate(opts.updated) : null;
+  const stale = upd && (Date.now() - upd) / 864e5 > STALE_DAYS;
+  const meta = [opts.rate ? opts.rate + ' p.a.' : '', opts.earmark ? peso(opts.earmark) + ' earmarked' : '', opts.updated ? 'updated ' + shortMDY(opts.updated) : '',
+    q ? `${q > 0 ? '+' : '−'}${peso(Math.abs(q))} queued` : ''].filter(Boolean);
+  return `<button class="row" data-acct="${esc(clean(name))}">
+    <div class="grow"><div class="t">${esc(clean(name))}</div>
+      ${meta.length || diff ? `<div class="s">${stale ? '<span class="stale"></span>' : ''}${esc(meta.join(' · '))}${diff ? `${meta.length ? ' · ' : ''}<span class="flag">Dashboard ${esc(peso(diff.sheet))}</span>` : ''}</div>` : ''}</div>
+    <div class="v ${v < -0.004 ? 'neg' : Math.abs(v) < 0.005 ? 'tr' : ''}">${esc(peso(v))}</div></button>`;
+}
+function groupCard(key, label, total, inner, totalCls) {
+  const open = !prefs.closed[key];
+  return `<details class="card" data-key="${esc(key)}" ${open ? 'open' : ''}><summary><span class="grow">${esc(label)}</span>
+    <span class="num ${totalCls || 'muted'}" style="font-weight:600">${esc(peso(total))}</span>${chev()}</summary>${inner}</details>`;
+}
+function renderBalances() {
+  const el = $('#v-bal'); const dash = snap && snap.dashboard;
+  if (!dash) { el.innerHTML = `<div class="empty">Balances appear after the first sync.</div>`; return; }
+  const x = derived();
+  const sum = Object.fromEntries((dash.summary || []).map(s => [s.label, s]));
+  const net = sum['Net Assets'];
+  const pendNet = x.pend.reduce((a, e) => a + (e.type === 'Inflow' ? +e.amount : e.type === 'Outflows' ? -e.amount : 0), 0);
+  const comp = (dash.summary || []).filter(s => s.sub && s.value != null && s.value > 0);
+  const totalComp = comp.reduce((a, b) => a + b.value, 0) || 1;
+  const colors = ['var(--c1)', 'var(--c2)', 'var(--c3)', 'var(--c4)', 'var(--c5)', 'var(--c6)'];
+  const hl = state.highlight, hlItem = comp.find(c => c.label === hl);
+
+  // account groups from the Dashboard layout, values from the app's own math
+  const groups = dash.groups.filter(g => !SHEET_ONLY.test(g.label));
+  const earmarks = {}; groups.filter(g => EARMARK.test(g.label)).forEach(g => g.items.forEach(it => earmarks[clean(it.name)] = it.value));
+  const placed = new Set(); const cardGroups = [];
+  groups.filter(g => !EARMARK.test(g.label)).sort((a, b) => (a.side === 'L' ? 0 : 1) - (b.side === 'L' ? 0 : 1)).forEach(g => {
+    const items = g.items.filter(it => !placed.has(clean(it.name))); items.forEach(it => placed.add(clean(it.name)));
+    if (items.length) cardGroups.push({ label: g.label, items });
+  });
+  const earOnly = groups.filter(g => EARMARK.test(g.label)).flatMap(g => g.items).filter(it => !placed.has(clean(it.name)));
+  earOnly.forEach(it => placed.add(clean(it.name)));
+  if (earOnly.length) cardGroups.push({ label: 'Earmarked accounts', items: earOnly });
+  const others = [...x.accounts].filter(a => !placed.has(a) && !RECEIVABLE_ACCTS.includes(a) && Math.abs(bal(a)) >= 0.5).sort();
+  if (others.length) cardGroups.push({ label: 'Other accounts in the log', items: others.map(n => ({ name: n })) });
+
+  const liquid = cardGroups.filter(g => /wallet|saving/i.test(g.label)).flatMap(g => g.items).reduce((a, it) => a + bal(it.name), 0);
+  const cards = cardGroups.filter(g => /credit/i.test(g.label)).flatMap(g => g.items).reduce((a, it) => a + bal(it.name), 0);
+  const monthName = parseISO(x.ym + '-01').toLocaleDateString('en-US', { month: 'long' });
+
+  let html = `<div class="card hero">
+    <div class="label">Net assets${x.pend.length ? ' · incl. queued' : ''}</div>
+    <div class="big">${esc(peso(net && net.value != null ? net.value + pendNet : null))}</div>
+    <div class="stats">
+      <div><div class="label">Wallets + savings</div><div class="v">${esc(peso(liquid, { round: true }))}</div></div>
+      <div><div class="label">${esc(monthName)} spending</div><div class="v">${esc(peso(x.monthTotal, { round: true }))}</div></div>
+      ${cards ? `<div><div class="label">Credit cards</div><div class="v ${cards < 0 ? 'neg' : ''}">${esc(peso(cards, { round: true }))}</div></div>` : ''}
+      <div><div class="label">Owed to you</div><div class="v">${esc(peso(Object.values(x.recv).filter(v => v >= TOL).reduce((a, b) => a + b, 0), { round: true }))}</div></div>
+    </div>
+    ${comp.length ? `<div class="stack">${comp.map((c, i) => `<button data-hl="${esc(c.label)}" style="flex:${c.value / totalComp};background:${colors[i % 6]};opacity:${hl && hl !== c.label ? .3 : 1}" aria-label="${esc(c.label)}"></button>`).join('')}</div>
+    <div class="legend">${comp.map((c, i) => `<button data-hl="${esc(c.label)}" class="${hl === c.label ? 'on' : ''}"><i style="background:${colors[i % 6]}"></i>${esc(c.label.replace(' Net of AP', ''))} ${esc(c.pct || '')}</button>`).join('')}</div>
+    ${hlItem ? `<div style="margin-top:10px;font-size:14px"><b>${esc(hlItem.label)}</b>: <span class="num">${esc(peso(hlItem.value))}</span> <span class="muted">(${esc(hlItem.pct || '')} of gross assets, from the Dashboard)</span></div>` : ''}` : ''}
+  </div>`;
+
+  // reconciliation status
+  const nd = x.diffs.length;
+  html += nd
+    ? `<details class="card" data-key="__recon" ${prefs.closed.__recon ? '' : 'open'}><summary><span class="grow"><span class="flag">${nd} ${nd === 1 ? 'account differs' : 'accounts differ'}</span> from the Dashboard</span>${chev()}</summary>
+       ${x.diffs.map(d => `<div class="diffrow"><b>${esc(d.name)}</b><div class="muted">Log ${esc(peso(d.app))} · Dashboard ${esc(peso(d.sheet))} · off by ${esc(peso(d.diff))}</div></div>`).join('')}
+       <div class="diffrow muted" style="font-size:13px">The app computes each account as its Destination total minus its Source total over every row, the same rule your Dashboard cells use. A gap means that Dashboard cell applies a different rule or range.</div></details>`
+    : `<div class="recon"><i></i>All ${x.checked} Dashboard accounts match the log (${rows.length.toLocaleString()} rows).</div>`;
+
+  if (x.monthTotal || Object.keys(x.cats).length) {
+    const cats = Object.entries(x.cats).sort((a, b) => b[1] - a[1]);
+    const max = Math.max(...cats.map(c => c[1]), 1);
+    const sheetMonth = dash.month && dash.month.label.includes(monthName) ? dash.month.total : null;
+    const monthDiff = sheetMonth != null && Math.abs(sheetMonth - x.monthTotal) > TOL;
+    html += groupCard('__month', monthName + ' spending', x.monthTotal,
+      `<div class="pad" style="padding-top:6px">${cats.map(([n, v]) => `<div style="margin-top:10px"><div style="display:flex;justify-content:space-between;font-size:14.5px"><span>${esc(n)}</span><span class="num">${esc(peso(v))}</span></div><div class="bar"><i style="width:${(v / max * 100).toFixed(1)}%"></i></div></div>`).join('')}
+       ${monthDiff ? `<p class="muted" style="font-size:13px;margin:14px 0 0"><span class="flag">Dashboard shows ${esc(peso(sheetMonth))}.</span> The app counts every Outflow this month into a spending category${x.pend.length ? ', including queued entries' : ''}.</p>` : ''}</div>`);
+  }
+
+  html += `<div class="sectiontitle">Accounts</div>`;
+  html += cardGroups.map(g => {
+    const total = g.items.reduce((a, it) => a + bal(it.name), 0);
+    return groupCard(g.label, g.label, total,
+      g.items.map(it => acctRow(it.name, { rate: it.rate, updated: it.updated, earmark: earmarks[clean(it.name)] })).join(''), total < 0 ? 'v neg' : '');
+  }).join('');
+
+  const sheetOnly = dash.groups.filter(g => SHEET_ONLY.test(g.label) && !/receivable/i.test(g.label));
+  if (sheetOnly.length) {
+    html += `<div class="sectiontitle">From the Dashboard</div>`;
+    html += sheetOnly.map(g => groupCard(g.label, g.label, g.total,
+      g.items.map(it => `<div class="row"><div class="grow"><div class="t">${esc(it.name)}</div></div><div class="v">${esc(peso(it.value))}</div></div>`).join(''))).join('');
+  }
+  html += `<p class="hint">Account balances are computed on this phone from the log. An amber dot means the account’s last update is over ${STALE_DAYS} days old. Tap an account to see its rows.</p>`;
+  el.innerHTML = html;
+}
+
+/* ---------- Owed ---------- */
+function renderReceivables() {
+  const el = $('#v-rec');
+  if (!snap) { el.innerHTML = `<div class="empty">Receivables appear after the first sync.</div>`; return; }
+  const x = derived();
+  const onDash = new Map(((x.dashRec && x.dashRec.items) || []).map(it => [clean(it.name), it.value]));
+  const open = Object.entries(x.recv).filter(([n, v]) => v >= TOL || onDash.has(n)).sort((a, b) => b[1] - a[1]);
+  const main = open.filter(([n]) => onDash.has(n) || !x.dashRec), extra = open.filter(([n]) => x.dashRec && !onDash.has(n));
+  const total = main.reduce((a, [, v]) => a + v, 0) || 1;
+  const row = ([n, v]) => {
+    const sv = onDash.get(n), off = sv != null && Math.abs(sv - v) > TOL;
+    return `<button class="row" data-who="${esc(n)}"><div class="grow"><div class="t">${esc(n)}</div>
+      ${off ? `<div class="s"><span class="flag">Dashboard ${esc(peso(sv))}</span></div>` : ''}<div class="bar"><i style="width:${Math.max(1, Math.min(100, v / total * 100)).toFixed(1)}%"></i></div></div>
+      <div style="text-align:right"><div class="v">${esc(peso(v))}</div><div class="s">${(v / total * 100).toFixed(1)}%</div></div></button>`;
+  };
+  const acctTotal = RECEIVABLE_ACCTS.reduce((a, n) => a + bal(n), 0);
+  el.innerHTML = `<div class="card hero"><div class="label">Owed to you</div><div class="big">${esc(peso(main.reduce((a, [, v]) => a + v, 0)))}</div>
+      <div class="muted" style="font-size:14px">${main.length} ${main.length === 1 ? 'person' : 'people'} · Lending + Other Receivables accounts ${esc(peso(acctTotal))}</div></div>
+    ${x.recDiffs.length ? `<div class="recon bad"><i></i>${x.recDiffs.length} ${x.recDiffs.length === 1 ? 'balance differs' : 'balances differ'} from the Dashboard Receivables list.</div>`
+      : x.dashRec ? `<div class="recon"><i></i>Matches the Dashboard Receivables list.</div>` : ''}
+    <div class="card">${main.map(row).join('') || '<div class="empty">Nothing outstanding.</div>'}</div>
+    ${extra.length ? groupCard('__extra', 'Also open in the log', extra.reduce((a, [, v]) => a + v, 0), extra.map(row).join('')) : ''}
+    <p class="hint">Each person’s balance is the net of rows into and out of Lending Receivables and Other Receivables whose description is their name. Tap a name to see those rows.</p>`;
+}
+
+/* ---------- Activity ---------- */
+function rowMatches(r, f) {
+  if (f.type !== 'All' && r.type !== f.type) return false;
+  if (f.account && clean(r.source) !== f.account && clean(r.dest) !== f.account) return false;
+  if (f.q) {
+    const hay = (r.desc + ' ' + r.source + ' ' + r.dest + ' ' + r.amount + ' ' + nf.format(r.amount)).toLowerCase();
+    if (!f.q.toLowerCase().split(/\s+/).every(w => hay.includes(w))) return false;
+  }
+  return true;
+}
+function amountView(r, acct) {
+  if (acct) { const into = clean(r.dest) === acct; return { cls: into ? 'in' : '', txt: (into ? '+' : '−') + peso(r.amount) }; }
+  if (r.type === 'Inflow') return { cls: 'in', txt: peso(r.amount, { plus: true }) };
+  if (r.type === 'Outflows') return { cls: '', txt: '−' + peso(r.amount) };
+  return { cls: 'tr', txt: peso(r.amount) };
+}
+function renderActivity() {
+  const f = state.filter;
+  const chips = ['All'].concat(TYPES).map(t => `<button class="chip${f.type === t ? ' on' : ''}" data-ft="${t}">${t === 'All' ? 'All' : TYPE_LABEL[t] + 's'}</button>`);
+  if (f.account) chips.unshift(`<button class="chip on" data-fa="x">${esc(f.account)} ✕</button>`);
+  $('#actChips').innerHTML = chips.join('');
+  const list = $('#actList');
+  if (!rows.length && !queue.length) { list.innerHTML = `<div class="empty">Transactions appear after the first sync.</div>`; return; }
+  const all = queue.map(e => Object.assign({ pending: true }, e)).reverse().concat(rows.slice().reverse());
+  const hits = all.filter(r => rowMatches(r, f));
+  if (!hits.length) { list.innerHTML = `<div class="empty">No matching transactions.</div>`; return; }
+  const shown = hits.slice(0, 400);
+  let html = '', day = null, buf = [], dayOut = 0;
+  const flushDay = () => { if (day === null) return;
+    html += `<div class="dayhead"><span>${esc(dayLabel(day))}</span>${dayOut ? `<span class="num">${esc(peso(dayOut))} out</span>` : ''}</div><div class="card">${buf.join('')}</div>`;
+    buf = []; dayOut = 0; };
+  shown.forEach((r, i) => {
+    if (r.date !== day) { flushDay(); day = r.date; }
+    if (r.type === 'Outflows') dayOut += Number(r.amount) || 0;
+    const a = amountView(r, f.account);
+    buf.push(`<button class="row" data-r="${i}"><div class="grow"><div class="t">${r.pending ? `<span class="pending">${r.status === 'failed' ? 'Rejected' : 'Queued'}</span>` : ''}${esc(r.desc)}</div>
+      <div class="s">${esc(clean(r.source))} → ${esc(clean(r.dest))}</div></div><div class="v ${a.cls}">${esc(a.txt)}</div></button>`);
+  });
+  flushDay();
+  state.shownRows = shown;
+  const acctLine = f.account && derived().accounts.has(f.account) ? `<div class="recon"><i></i>${esc(f.account)} balance ${esc(peso(bal(f.account)))}</div>` : '';
+  list.innerHTML = acctLine + html + `<p class="hint">${hits.length > 400 ? `Showing the newest 400 of ${hits.length.toLocaleString()} matches.` : `${hits.length.toLocaleString()} ${hits.length === 1 ? 'row' : 'rows'}`} · full log of ${rows.length.toLocaleString()} rows is on this phone.</p>`;
+}
+
+/* ---------- sheets (modals) ---------- */
+function openSheet(html) { $('#sheet').innerHTML = `<div class="grab"></div>` + html; $('#sheet').classList.add('on'); $('#scrim').classList.add('on'); }
+function closeSheet() { if (!cfg) return; $('#sheet').classList.remove('on'); $('#scrim').classList.remove('on'); }
+
+function openRow(r) {
+  const tsv = [sheetDate(r.date), r.desc, r.type, r.source, r.dest, r.amount].join('\t');
+  openSheet(`<h2>${esc(r.desc)}</h2><p>${r.pending ? 'On this phone, not yet in the sheet' : 'Row ' + r.row + ' of Transactions'}</p>
+    <div class="kv"><span>Date</span><span>${esc(dayLabel(r.date))} (${esc(sheetDate(r.date))})</span></div>
+    <div class="kv"><span>Type</span><span>${esc(r.type)}</span></div>
+    <div class="kv"><span>Source</span><span>${esc(clean(r.source))}</span></div>
+    <div class="kv"><span>Destination</span><span>${esc(clean(r.dest))}</span></div>
+    <div class="kv"><span>Amount</span><span class="num">${esc(peso(Number(r.amount)))}</span></div>
+    <div class="btns"><button class="primary" id="again">Log again for today</button>
+    <button class="secondary" id="copytsv">Copy as sheet row</button>
+    <button class="secondary" id="closeS">Close</button></div>`);
+  $('#again').onclick = () => {
+    closeSheet(); switchTab('add');
+    $('#desc').value = r.desc; $('#amt').value = String(r.amount); $('#date').value = isoDay(0);
+    if (TYPES.includes(r.type)) state.type = r.type; renderAddForm(r.source, r.dest);
+    toast('Check the amount, then Save');
+  };
+  $('#copytsv').onclick = async () => { try { await navigator.clipboard.writeText(tsv); toast('Copied'); } catch (e) { toast('Copy failed', 'err'); } };
+  $('#closeS').onclick = closeSheet;
+}
+
+function openSettings(msg) {
+  const first = !cfg;
+  openSheet(`<h2>${first ? 'Connect your sheet' : 'Settings'}</h2>
+    ${msg ? `<div class="banner" style="margin-top:8px">${esc(msg)}</div>` : ''}
+    ${first ? `<p>Paste your connection code. It stays on this phone. The first sync downloads your whole Transactions log.</p>` : ''}
+    <label class="label" for="sUrl">Connection code or Web app URL</label>
+    <input class="txt" id="sUrl" placeholder="https://script.google.com/macros/s/…/exec" value="${esc(cfg ? cfg.url : '')}" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+    <label class="label" for="sKey">Key (not needed with a connection code)</label>
+    <input class="txt" id="sKey" placeholder="Only if you pasted a plain URL" value="${esc(cfg ? cfg.key : '')}" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+    <div class="btns"><button class="primary" id="sSave">${first ? 'Connect' : 'Save and test'}</button>
+    ${first ? '' : `<button class="secondary" id="sSync">Sync now</button>
+    <button class="secondary" id="sFull">Re-download the full log</button>
+    ${queue.length ? `<button class="secondary" id="sDiscard" style="color:var(--neg)">Discard ${queue.length} queued ${queue.length === 1 ? 'entry' : 'entries'}</button>` : ''}
+    <button class="secondary" id="closeS">Close</button>`}</div>
+    ${first ? '' : `<p style="margin-top:14px;font-size:13px">${rows.length.toLocaleString()} rows on this phone · last sync ${snap && snap.syncedAt ? esc(new Date(snap.syncedAt).toLocaleString()) : 'never'}${snap && snap.bufferRows != null ? ` · ${snap.bufferRows} blank rows left in Transactions` : ''} · v${VERSION}</p>`}`);
+  $('#sSave').onclick = async () => {
+    let u = clean($('#sUrl').value).replace(/\s+/g, ''), k = clean($('#sKey').value);
+    const m = /^(https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec)#(\w+)$/.exec(u);
+    if (m) { u = m[1]; k = m[2]; }
+    const conf = { url: u, key: k };
+    if (!/^https:\/\/script\.google(usercontent)?\.com\//.test(conf.url)) { toast('That doesn’t look like an Apps Script URL', 'err'); return; }
+    if (!conf.key) { toast('Paste the key too', 'err'); return; }
+    const b = $('#sSave'); b.disabled = true; b.textContent = 'Testing…';
+    try {
+      await api('ping', {}, conf);
+      cfg = conf; store.set(LS.cfg, cfg); state.lastError = null;
+      $('#sheet').classList.remove('on'); $('#scrim').classList.remove('on');
+      toast('Connected. Downloading your log…'); renderAll(); sync();
+    } catch (e) { b.disabled = false; b.textContent = first ? 'Connect' : 'Save and test'; toast(e.auth ? 'Wrong key' : e.message, 'err'); }
+  };
+  if (!first) {
+    $('#sSync').onclick = () => { closeSheet(); sync(); };
+    $('#sFull').onclick = () => { blocks = {}; store.set(LS.blocks, blocks); closeSheet(); sync(); };
+    $('#closeS').onclick = closeSheet;
+    const dz = $('#sDiscard'); if (dz) dz.onclick = () => { if (confirm('Discard all queued entries? They have not reached your sheet.')) { queue = []; saveQueue(); closeSheet(); renderAll(); } };
+  }
+}
+
+/* ---------- navigation ---------- */
+function switchTab(t) {
+  state.tab = t; prefs.tab = t; savePrefs();
+  document.querySelectorAll('.view').forEach(v => v.classList.toggle('on', v.id === 'v-' + t));
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
+  $('#title').textContent = TITLES[t];
+  window.scrollTo(0, 0);
+  renderView();
+}
+function renderView() {
+  if (state.tab === 'add') { renderAddBanner(); renderAddForm(); renderQueue(); }
+  if (state.tab === 'bal') renderBalances();
+  if (state.tab === 'act') renderActivity();
+  if (state.tab === 'rec') renderReceivables();
+}
+function renderAll() { renderStatus(); renderView(); }
+
+/* ---------- events ---------- */
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => switchTab(b.dataset.tab));
+$('#status').onclick = () => cfg ? sync() : openSettings();
+$('#gear').onclick = () => openSettings();
+$('#scrim').onclick = closeSheet;
+window.addEventListener('scroll', () => $('#hdr').classList.toggle('scrolled', window.scrollY > 4), { passive: true });
+
+$('#typeSeg').onclick = e => { const b = e.target.closest('button'); if (!b) return; state.type = b.dataset.type; renderAddForm(); };
+$('#src').onchange = () => { renderDests(); markChips($('#srcChips'), $('#src').value); renderSrcBal(); };
+$('#dst').onchange = () => markChips($('#dstChips'), $('#dst').value);
+$('#srcChips').onclick = e => { const c = e.target.closest('.chip'); if (!c) return; $('#src').value = c.dataset.v; renderDests(); markChips($('#srcChips'), c.dataset.v); renderSrcBal(); };
+$('#dstChips').onclick = e => { const c = e.target.closest('.chip'); if (!c) return; $('#dst').value = c.dataset.v; markChips($('#dstChips'), c.dataset.v); };
+$('#desc').addEventListener('input', renderSuggestions);
+$('#desc').addEventListener('focus', renderSuggestions);
+$('#desc').addEventListener('blur', () => setTimeout(() => $('#sugg').hidden = true, 200));
+$('#sugg').addEventListener('pointerdown', e => e.preventDefault());
+$('#sugg').onclick = e => { const b = e.target.closest('button'); if (!b) return; applyTemplate(derived().templates[+b.dataset.i]); };
+$('#date').onchange = markDateChips;
+document.querySelectorAll('[data-day]').forEach(c => c.onclick = () => { $('#date').value = isoDay(+c.dataset.day); markDateChips(); });
+
+$('#save').onclick = () => {
+  if (!cfg) { openSettings(); return; }
+  const amount = parseAmount($('#amt').value);
+  const desc = clean($('#desc').value);
+  const source = $('#src').value, dest = $('#dst').value, date = $('#date').value;
+  if (!(amount > 0)) { toast('Enter an amount', 'err'); $('#amt').focus(); return; }
+  if (!desc) { toast('Add a description', 'err'); $('#desc').focus(); return; }
+  if (!source || !dest) { toast('Pick a source and destination', 'err'); return; }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { toast('Pick a date', 'err'); return; }
+  queue.push({ id: uid(), date, desc, type: state.type, source, dest, amount, createdAt: Date.now(), status: 'pending' });
+  saveQueue();
+  prefs.lastSrc[state.type] = source; prefs.lastDst[state.type + '|' + source] = dest; savePrefs();
+  $('#amt').value = ''; $('#desc').value = '';
+  toast(navigator.onLine ? 'Saved' : 'Saved on this phone. It reaches the sheet when you’re back online.');
+  renderAll(); flush();
+};
+
+$('#queueWrap').onclick = e => {
+  const b = e.target.closest('[data-q]'); if (!b) return;
+  const i = queue.findIndex(x => x.id === b.dataset.id); if (i < 0) return;
+  const en = queue[i];
+  if (b.dataset.q === 'del') queue.splice(i, 1);
+  if (b.dataset.q === 'retry') { en.status = 'pending'; delete en.error; }
+  if (b.dataset.q === 'edit') {
+    queue.splice(i, 1);
+    $('#amt').value = String(en.amount); $('#desc').value = en.desc; $('#date').value = en.date;
+    if (TYPES.includes(en.type)) state.type = en.type;
+    saveQueue(); renderAddForm(en.source, en.dest); renderAll(); window.scrollTo(0, 0); return;
+  }
+  saveQueue(); renderAll(); if (b.dataset.q === 'retry') flush();
+};
+
+$('#v-bal').addEventListener('click', e => {
+  const hl = e.target.closest('[data-hl]');
+  if (hl) { state.highlight = state.highlight === hl.dataset.hl ? null : hl.dataset.hl; renderBalances(); return; }
+  const a = e.target.closest('[data-acct]');
+  if (a) { state.filter = { q: '', type: 'All', account: a.dataset.acct }; $('#q').value = ''; switchTab('act'); }
+});
+['#v-bal', '#v-rec'].forEach(id => $(id).addEventListener('toggle', e => {
+  const d = e.target; if (!d.dataset || !d.dataset.key) return;
+  if (d.open) delete prefs.closed[d.dataset.key]; else prefs.closed[d.dataset.key] = 1; savePrefs();
+}, true));
+$('#v-rec').addEventListener('click', e => {
+  const w = e.target.closest('[data-who]'); if (!w) return;
+  state.filter = { q: w.dataset.who, type: 'All', account: null }; $('#q').value = w.dataset.who; switchTab('act');
+});
+let qTimer;
+$('#q').addEventListener('input', () => { clearTimeout(qTimer); qTimer = setTimeout(() => { state.filter.q = clean($('#q').value); renderActivity(); }, 120); });
+$('#actChips').onclick = e => {
+  const c = e.target.closest('.chip'); if (!c) return;
+  if (c.dataset.fa) state.filter.account = null; else state.filter.type = c.dataset.ft;
+  renderActivity();
+};
+$('#actList').onclick = e => { const r = e.target.closest('[data-r]'); if (r) openRow(state.shownRows[+r.dataset.r]); };
+
+window.addEventListener('online', () => sync());
+window.addEventListener('offline', renderAll);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible' || !cfg) return;
+  const age = snap && snap.syncedAt ? Date.now() - Date.parse(snap.syncedAt) : Infinity;
+  if (age > 60000) sync(); else flush();
+});
+setInterval(renderStatus, 30000);
+
+/* ---------- boot ---------- */
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  navigator.serviceWorker.register('sw.js').then(reg => {
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing; if (!w) return;
+      w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) toast('Update downloaded. Close and reopen the app to use it.'); });
+    });
+  }).catch(() => {});
+}
+switchTab(TITLES[state.tab] ? state.tab : 'add');
+if (!cfg) openSettings(); else sync();
+</script>
+</body>
+</html>
