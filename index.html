@@ -173,6 +173,27 @@ details.card[open]>summary{border-bottom:1px solid var(--line)}
 .diffrow{padding:10px 16px;border-top:1px solid var(--line);font-size:14px}
 .diffrow b{font-weight:600}
 .flag{color:var(--warn);font-weight:600}
+.bs{overflow:hidden}
+.bshead{font-size:12.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:14px 16px 6px}
+.bsg>summary{list-style:none;display:flex;align-items:center;gap:10px;padding:12px 16px;border-top:1px solid var(--line);cursor:pointer}
+.bsg>summary::-webkit-details-marker{display:none}
+.bsg>summary .grow{flex:1;font-size:15.5px;font-weight:550}
+.bsg>summary .num{font-weight:600;font-variant-numeric:tabular-nums}
+.bsg>summary .num.neg{color:var(--neg)}
+.bsg>summary .chev{width:13px;height:13px;color:var(--faint);transition:transform .2s}
+.bsg[open]>summary .chev{transform:rotate(90deg)}
+.bsg .bsi{padding-left:30px;background:color-mix(in srgb,var(--chip) 35%,transparent)}
+.bsg .bsi .t{font-size:14.5px;font-weight:450}
+.bsg .bsi .v{font-size:14.5px;font-weight:500}
+.bstotal{display:flex;justify-content:space-between;gap:10px;padding:13px 16px;border-top:1.5px solid var(--ink);font-weight:700;font-size:16px}
+.bstotal .num{font-variant-numeric:tabular-nums}
+.bstotal.net{border-top:0;font-size:18px}
+.bstotal.net .num{border-bottom:3px double var(--ink);padding-bottom:1px}
+.bsnote{font-size:12.5px;color:var(--muted);padding:6px 16px 6px 30px}
+.kvs{display:flex;justify-content:space-between;font-size:14.5px;padding:5px 0}
+.kvs.sub{font-size:13px;color:var(--muted);padding:2px 0 2px 12px}
+.legend span{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--muted)}
+
 .bulk{width:100%;min-height:130px;font:13px/1.45 ui-monospace,Menlo,monospace;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);padding:10px;outline:0;resize:vertical}
 .bulk:focus{border-color:var(--accent)}
 .brow,.sheet label.brow{display:flex;gap:10px;align-items:flex-start;padding:10px 0;margin:0;border-bottom:1px solid var(--line)}
@@ -251,15 +272,15 @@ details.card[open]>summary{border-bottom:1px solid var(--line)}
     <div id="actList"></div>
   </section>
 
-  <!-- RECEIVABLES -->
-  <section class="view" id="v-rec"></section>
+  <!-- REPORTS -->
+  <section class="view" id="v-rep"></section>
 </main>
 
 <nav id="tabs">
   <button data-tab="add"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>Add<span class="badge" id="qBadge" hidden></span></button>
   <button data-tab="bal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="14" rx="3"/><path d="M3 10h18M16 15h2"/><path d="M6 6V5a2 2 0 0 1 2-2h8"/></svg>Balances</button>
   <button data-tab="act"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg>Activity</button>
-  <button data-tab="rec"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><path d="M17 4.5a3.5 3.5 0 0 1 0 7M22 21a6 6 0 0 0-4-5.6"/></svg>Owed</button>
+  <button data-tab="rep"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Reports</button>
 </nav>
 
 <div class="scrim" id="scrim"></div>
@@ -268,11 +289,11 @@ details.card[open]>summary{border-bottom:1px solid var(--line)}
 
 <script>
 'use strict';
-const VERSION = '1.4.0';
+const VERSION = '1.5.0';
 const TYPES = ['Outflows', 'Inflow', 'Transfer'];
 const TYPE_LABEL = { Outflows: 'Outflow', Inflow: 'Inflow', Transfer: 'Transfer' };
 const LS = { cfg: 'ledger.cfg', rows: 'ledger.rows', blocks: 'ledger.blocks', snap: 'ledger.snap', queue: 'ledger.queue', prefs: 'ledger.prefs' };
-const TITLES = { add: 'Add', bal: 'Balances', act: 'Activity', rec: 'Owed to you' };
+const TITLES = { add: 'Add', bal: 'Balances', act: 'Activity', rep: 'Reports' };
 const STALE_DAYS = 21;
 const TOL = 1;                                   // Dashboard shows ₱0 for wallet balances of ₱1 or less
 const RECEIVABLE_ACCTS = ['Lending Receivables', 'Other Receivables'];
@@ -291,7 +312,7 @@ let rows = store.get(LS.rows, []);       // full Transactions log, ascending by 
 let blocks = store.get(LS.blocks, {});   // { blockStartRow: hash } from the last sync
 let snap = store.get(LS.snap, null);     // { options, dashboard, bufferRows, syncedAt, lastRow }
 let queue = store.get(LS.queue, []);     // entries logged here and not yet confirmed by the sheet
-let prefs = Object.assign({ lastSrc: {}, lastDst: {}, tab: 'add', closed: {} }, store.get(LS.prefs, {}));
+let prefs = Object.assign({ lastSrc: {}, lastDst: {}, tab: 'add', closed: {}, open: {} }, store.get(LS.prefs, {}));
 const saveQueue = () => { store.set(LS.queue, queue); dirty(); };
 const savePrefs = () => store.set(LS.prefs, prefs);
 
@@ -612,42 +633,76 @@ function groupCard(key, label, total, inner, totalCls) {
   return `<details class="card" data-key="${esc(key)}" ${open ? 'open' : ''}><summary><span class="grow">${esc(label)}</span>
     <span class="num ${totalCls || 'muted'}" style="font-weight:600">${esc(peso(total))}</span>${chev()}</summary>${inner}</details>`;
 }
+function earmarkMap(dash) {
+  const m = {};
+  dash.groups.filter(g => EARMARK.test(g.label)).forEach(g => g.items.forEach(it => m[clean(it.name)] = it.value));
+  return m;
+}
+/** Pro forma balance sheet in the Dashboard's structure, valued from the app's own ledger math. */
+function balanceSheet(dash) {
+  const x = derived(); const earmarks = earmarkMap(dash);
+  const items = re => dash.groups.filter(g => re.test(g.label)).flatMap(g => g.items);
+  const line = (it, value, meta) => ({ name: clean(it.name), value: r2(value), rate: it.rate, updated: it.updated, meta: meta || '', acct: x.accounts.has(clean(it.name)) });
+  const wallets = items(/wallet/i).map(it => {
+    const raw = bal(it.name), e = earmarks[clean(it.name)] || 0, v = raw - e > TOL ? raw - e : 0;
+    return line(it, v, e ? `${peso(e)} earmarked · balance ${peso(raw)}` : Math.abs(v - raw) > 0.004 ? `balance ${peso(raw)}` : '');
+  });
+  const plain = re => items(re).map(it => line(it, bal(it.name)));
+  const restricted = items(EARMARK).map(it => line(it, it.value, 'earmarked portion'));
+  const recG = dash.groups.find(g => /receivable/i.test(g.label));
+  const recv = (recG ? recG.items : []).map(it => ({ name: clean(it.name), value: r2(x.recv[clean(it.name)] || 0), who: true, sheet: it.value }));
+  const onDash = new Set(recv.map(r => r.name));
+  const recvExtra = Object.entries(x.recv).filter(([n, v]) => v >= TOL && !onDash.has(n)).sort((a, b) => b[1] - a[1]).map(([n, v]) => ({ name: n, value: r2(v), who: true }));
+  const cards = items(/credit/i).map(it => line(it, -bal(it.name), bal(it.name) > 0.004 ? 'credit balance' : ''));
+  const apIt = items(/allocated/i).find(it => /accounts payable/i.test(it.name));
+  const ap = apIt ? [{ name: 'Accounts Payable', value: apIt.value, meta: 'from the Dashboard' }] : [];
+  const total = arr => r2(arr.reduce((s, i) => s + (i.total != null ? i.total : i.value), 0));
+  const mk = (key, label, list, extra) => ({ key, label, items: list, extra, total: total(list) });
+  const assets = [mk('wallets', 'Wallets', wallets), mk('savings', 'Savings', plain(/saving/i)), mk('restricted', 'Restricted cash', restricted),
+    mk('sti', 'Short-term investments', plain(/short term/i)), mk('lti', 'Long-term investments', plain(/long term/i)),
+    mk('recv', 'Receivables', recv, recvExtra), mk('ventures', 'Ventures', plain(/venture/i))].filter(g => g.items.length);
+  const liabilities = [mk('cards', 'Credit cards', cards), mk('ap', 'Accounts payable', ap)].filter(g => g.items.length);
+  const placed = new Set(dash.groups.filter(g => !/allocated|receivable/i.test(g.label)).flatMap(g => g.items.map(i => clean(i.name))));
+  const others = [...x.accounts].filter(a => !placed.has(a) && !RECEIVABLE_ACCTS.includes(a) && a !== 'Accounts Payable' && Math.abs(bal(a)) >= 0.5)
+    .sort().map(n => ({ name: n, value: bal(n), acct: true }));
+  const ta = total(assets), tl = total(liabilities);
+  return { assets, liabilities, ta, tl, net: r2(ta - tl), others, allocs: items(/allocated/i) };
+}
+function bsRow(it) {
+  const x = derived(); const diff = it.acct && x.diffs.find(d => d.name === it.name);
+  const q = it.acct ? queuedDelta(it.name) : 0;
+  const upd = it.updated ? mdyToDate(it.updated) : null;
+  const stale = upd && (Date.now() - upd) / 864e5 > STALE_DAYS;
+  const meta = [it.rate ? it.rate + ' p.a.' : '', it.meta, it.updated ? 'updated ' + shortMDY(it.updated) : '', q ? `${peso(q, { plus: true })} queued` : ''].filter(Boolean);
+  const off = it.sheet != null && Math.abs(it.sheet - it.value) > TOL;
+  const tag = it.acct ? `button class="row bsi" data-acct="${esc(it.name)}"` : it.who ? `button class="row bsi" data-who="${esc(it.name)}"` : 'div class="row bsi"';
+  return `<${tag}><div class="grow"><div class="t">${esc(it.name)}</div>${meta.length || diff || off ? `<div class="s">${stale ? '<span class="stale"></span>' : ''}${esc(meta.join(' · '))}${diff ? `${meta.length ? ' · ' : ''}<span class="flag">Dashboard ${esc(peso(diff.sheet))}</span>` : ''}${off ? `${meta.length ? ' · ' : ''}<span class="flag">Dashboard ${esc(peso(it.sheet))}</span>` : ''}</div>` : ''}</div>
+    <div class="v ${it.value < -0.004 ? 'neg' : Math.abs(it.value) < 0.005 ? 'tr' : ''}">${esc(peso(it.value))}</div></${tag.split(' ')[0]}>`;
+}
+function bsGroup(g) {
+  const open = prefs.open[g.key];
+  return `<details class="bsg" data-okey="${g.key}" ${open ? 'open' : ''}><summary><span class="grow">${esc(g.label)}</span>
+    <span class="num ${g.total < -0.004 ? 'neg' : ''}">${esc(peso(g.total))}</span>${chev()}</summary>
+    ${g.items.map(bsRow).join('')}
+    ${g.extra && g.extra.length ? `<div class="bsnote">Also open in the log, not on the Dashboard and not in the total</div>${g.extra.map(bsRow).join('')}` : ''}</details>`;
+}
 function renderBalances() {
   const el = $('#v-bal'); const dash = snap && snap.dashboard;
   if (!dash) { el.innerHTML = `<div class="empty">Balances appear after the first sync.</div>`; return; }
   const x = derived();
   const sum = Object.fromEntries((dash.summary || []).map(s => [s.label, s]));
-  const net = sum['Net Assets'];
   const pendNet = x.pend.reduce((a, e) => a + (e.type === 'Inflow' ? +e.amount : e.type === 'Outflows' ? -e.amount : 0), 0);
-  const comp = (dash.summary || []).filter(s => s.sub && s.value != null && s.value > 0);
-  const totalComp = comp.reduce((a, b) => a + b.value, 0) || 1;
-  const colors = ['var(--c1)', 'var(--c2)', 'var(--c3)', 'var(--c4)', 'var(--c5)', 'var(--c6)'];
-  const hl = state.highlight, hlItem = comp.find(c => c.label === hl);
-
-  // account groups from the Dashboard layout, values from the app's own math
-  const groups = dash.groups.filter(g => !SHEET_ONLY.test(g.label));
-  const earmarks = {}; groups.filter(g => EARMARK.test(g.label)).forEach(g => g.items.forEach(it => earmarks[clean(it.name)] = it.value));
-  const placed = new Set(); const cardGroups = [];
-  groups.filter(g => !EARMARK.test(g.label)).sort((a, b) => (a.side === 'L' ? 0 : 1) - (b.side === 'L' ? 0 : 1)).forEach(g => {
-    const items = g.items.filter(it => !placed.has(clean(it.name))); items.forEach(it => placed.add(clean(it.name)));
-    if (items.length) cardGroups.push({ label: g.label, items });
-  });
-  const earOnly = groups.filter(g => EARMARK.test(g.label)).flatMap(g => g.items).filter(it => !placed.has(clean(it.name)));
-  earOnly.forEach(it => placed.add(clean(it.name)));
-  if (earOnly.length) cardGroups.push({ label: 'Earmarked accounts', items: earOnly });
-  const others = [...x.accounts].filter(a => !placed.has(a) && !RECEIVABLE_ACCTS.includes(a) && Math.abs(bal(a)) >= 0.5).sort();
-  if (others.length) cardGroups.push({ label: 'Other accounts in the log', items: others.map(n => ({ name: n })) });
-
-  const cards = cardGroups.filter(g => /credit/i.test(g.label)).flatMap(g => g.items).reduce((a, it) => a + bal(it.name), 0);
-  // Net liquidity, same rule as the Dashboard: wallets (non-earmarked part, ₱1 or less counts as 0) + savings + credit cards
+  const earmarks = earmarkMap(dash);
   const nl = netLiquidity(dash, earmarks);
   const sheetNL = sum['Net Liquidity'];
   const nlOff = sheetNL && sheetNL.value != null && Math.abs(nl.synced - sheetNL.value) > TOL;
-  const netVal = net && net.value != null ? net.value + pendNet : null;
-  // Net cash available, same rule as the Dashboard: net liquidity minus Allocated Cash
+  const bs = balanceSheet(dash);
+  const sheetNet = sum['Net Assets'] && sum['Net Assets'].value;
+  const netOff = sheetNet != null && Math.abs(bs.net - pendNet - sheetNet) > TOL;
   const alloc = dash.groups.find(g => /allocated/i.test(g.label));
   const allocTotal = alloc ? (alloc.total != null ? alloc.total : alloc.items.reduce((a, it) => a + it.value, 0)) : 0;
   const nca = r2(nl.live - allocTotal);
+  const cardsOwed = (bs.liabilities.find(g => g.key === 'cards') || { total: 0 }).total;
   const monthName = parseISO(x.ym + '-01').toLocaleDateString('en-US', { month: 'long' });
 
   let html = `<div class="card hero">
@@ -658,17 +713,13 @@ function renderBalances() {
     </button>
     <div class="stats">
       <button data-nl="1" style="text-align:left"><div class="label">Net liquidity</div><div class="v ${nl.live < 0 ? 'neg' : ''}">${esc(peso(nl.live, { round: true }))}</div>
-        <div class="s muted" style="font-size:12.5px">${netVal ? esc((nl.live / netVal * 100).toFixed(1)) + '% of net assets' : ''}${nlOff ? ` · <span class="flag">Dashboard ${esc(peso(sheetNL.value, { round: true }))}</span>` : ''}</div></button>
+        <div class="s muted" style="font-size:12.5px">${bs.net ? esc((nl.live / bs.net * 100).toFixed(1)) + '% of net assets' : ''}${nlOff ? ` · <span class="flag">Dashboard ${esc(peso(sheetNL.value, { round: true }))}</span>` : ''}</div></button>
       <div><div class="label">${esc(monthName)} spending</div><div class="v">${esc(peso(x.monthTotal, { round: true }))}</div></div>
-      ${cards ? `<div><div class="label">Credit cards</div><div class="v ${cards < 0 ? 'neg' : ''}">${esc(peso(cards, { round: true }))}</div></div>` : ''}
-      <div><div class="label">Net assets</div><div class="v">${esc(peso(netVal, { round: true }))}</div></div>
+      <div><div class="label">Credit cards owed</div><div class="v">${esc(peso(cardsOwed, { round: true }))}</div></div>
+      <div><div class="label">Net assets</div><div class="v">${esc(peso(bs.net, { round: true }))}</div></div>
     </div>
-    ${comp.length ? `<div class="stack">${comp.map((c, i) => `<button data-hl="${esc(c.label)}" style="flex:${c.value / totalComp};background:${colors[i % 6]};opacity:${hl && hl !== c.label ? .3 : 1}" aria-label="${esc(c.label)}"></button>`).join('')}</div>
-    <div class="legend">${comp.map((c, i) => `<button data-hl="${esc(c.label)}" class="${hl === c.label ? 'on' : ''}"><i style="background:${colors[i % 6]}"></i>${esc(c.label.replace(' Net of AP', ''))} ${esc(c.pct || '')}</button>`).join('')}</div>
-    ${hlItem ? `<div style="margin-top:10px;font-size:14px"><b>${esc(hlItem.label)}</b>: <span class="num">${esc(peso(hlItem.value))}</span> <span class="muted">(${esc(hlItem.pct || '')} of gross assets, from the Dashboard)</span></div>` : ''}` : ''}
   </div>`;
 
-  // reconciliation status
   const nd = x.diffs.length;
   html += nd
     ? `<details class="card" data-key="__recon" ${prefs.closed.__recon ? '' : 'open'}><summary><span class="grow"><span class="flag">${nd} ${nd === 1 ? 'account differs' : 'accounts differ'}</span> from the Dashboard</span>${chev()}</summary>
@@ -676,30 +727,19 @@ function renderBalances() {
        <div class="diffrow muted" style="font-size:13px">The app computes each account as its Destination total minus its Source total over every row, the same rule your Dashboard cells use. A gap means that Dashboard cell applies a different rule or range.</div></details>`
     : `<div class="recon"><i></i>All ${x.checked} Dashboard accounts match the log (${rows.length.toLocaleString()} rows).</div>`;
 
-  if (x.monthTotal || Object.keys(x.cats).length) {
-    const cats = Object.entries(x.cats).sort((a, b) => b[1] - a[1]);
-    const max = Math.max(...cats.map(c => c[1]), 1);
-    const sheetMonth = dash.month && dash.month.label.includes(monthName) ? dash.month.total : null;
-    const monthDiff = sheetMonth != null && Math.abs(sheetMonth - x.monthTotal) > TOL;
-    html += groupCard('__month', monthName + ' spending', x.monthTotal,
-      `<div class="pad" style="padding-top:6px">${cats.map(([n, v]) => `<div style="margin-top:10px"><div style="display:flex;justify-content:space-between;font-size:14.5px"><span>${esc(n)}</span><span class="num">${esc(peso(v))}</span></div><div class="bar"><i style="width:${(v / max * 100).toFixed(1)}%"></i></div></div>`).join('')}
-       ${monthDiff ? `<p class="muted" style="font-size:13px;margin:14px 0 0"><span class="flag">Dashboard shows ${esc(peso(sheetMonth))}.</span> The app counts every Outflow this month into a spending category${x.pend.length ? ', including queued entries' : ''}.</p>` : ''}</div>`);
-  }
+  html += `<div class="sectiontitle">Balance sheet · as of ${esc(dayLabel(isoDay(0)).toLowerCase())}</div>
+    <div class="card bs"><div class="bshead">Assets</div>${bs.assets.map(bsGroup).join('')}
+      <div class="bstotal"><span>Total assets</span><span class="num">${esc(peso(bs.ta))}</span></div></div>
+    <div class="card bs"><div class="bshead">Liabilities</div>${bs.liabilities.map(bsGroup).join('')}
+      <div class="bstotal"><span>Total liabilities</span><span class="num">${esc(peso(bs.tl))}</span></div></div>
+    <div class="card bs"><div class="bstotal net"><span>Net assets</span><span class="num">${esc(peso(bs.net))}</span></div>
+      <div class="bsnote" style="padding-bottom:12px">${netOff ? `<span class="flag">Dashboard shows ${esc(peso(sheetNet))}.</span> ` : 'Matches the Dashboard. '}Total assets less total liabilities${x.pend.length ? ', including entries queued on this phone' : ''}.</div></div>`;
 
-  html += `<div class="sectiontitle">Accounts</div>`;
-  html += cardGroups.map(g => {
-    const total = g.items.reduce((a, it) => a + bal(it.name), 0);
-    return groupCard(g.label, g.label, total,
-      g.items.map(it => acctRow(it.name, { rate: it.rate, updated: it.updated, earmark: earmarks[clean(it.name)] })).join(''), total < 0 ? 'v neg' : '');
-  }).join('');
-
-  const sheetOnly = dash.groups.filter(g => SHEET_ONLY.test(g.label) && !/receivable/i.test(g.label));
-  if (sheetOnly.length) {
-    html += `<div class="sectiontitle">From the Dashboard</div>`;
-    html += sheetOnly.map(g => groupCard(g.label, g.label, g.total,
-      g.items.map(it => `<div class="row"><div class="grow"><div class="t">${esc(it.name)}</div></div><div class="v">${esc(peso(it.value))}</div></div>`).join(''))).join('');
-  }
-  html += `<p class="hint">Account balances are computed on this phone from the log. An amber dot means the account’s last update is over ${STALE_DAYS} days old. Tap an account to see its rows.</p>`;
+  html += `<div class="sectiontitle">Memo</div><div class="card bs">
+    ${bsGroup({ key: 'allocs', label: 'Allocated cash', total: r2(bs.allocs.reduce((a, it) => a + it.value, 0)), items: bs.allocs.map(it => ({ name: clean(it.name), value: it.value, meta: 'from the Dashboard' })) })}
+    ${bs.others.length ? bsGroup({ key: 'others', label: 'Other accounts in the log', total: r2(bs.others.reduce((a, it) => a + it.value, 0)), items: bs.others }) : ''}
+    </div>
+    <p class="hint">Balances are computed on this phone from the log, in your Dashboard’s structure. Accounts payable, restricted and allocated amounts come from the Dashboard. Tap an account or person to see their rows.</p>`;
   el.innerHTML = html;
 }
 
@@ -744,29 +784,156 @@ function openNetLiquidity() {
   $('#closeS').onclick = closeSheet;
 }
 
-/* ---------- Owed ---------- */
-function renderReceivables() {
-  const el = $('#v-rec');
-  if (!snap) { el.innerHTML = `<div class="empty">Receivables appear after the first sync.</div>`; return; }
-  const x = derived();
-  const onDash = new Map(((x.dashRec && x.dashRec.items) || []).map(it => [clean(it.name), it.value]));
-  const open = Object.entries(x.recv).filter(([n, v]) => v >= TOL || onDash.has(n)).sort((a, b) => b[1] - a[1]);
-  const main = open.filter(([n]) => onDash.has(n) || !x.dashRec), extra = open.filter(([n]) => x.dashRec && !onDash.has(n));
-  const total = main.reduce((a, [, v]) => a + v, 0) || 1;
-  const row = ([n, v]) => {
-    const sv = onDash.get(n), off = sv != null && Math.abs(sv - v) > TOL;
-    return `<button class="row" data-who="${esc(n)}"><div class="grow"><div class="t">${esc(n)}</div>
-      ${off ? `<div class="s"><span class="flag">Dashboard ${esc(peso(sv))}</span></div>` : ''}<div class="bar"><i style="width:${Math.max(1, Math.min(100, v / total * 100)).toFixed(1)}%"></i></div></div>
-      <div style="text-align:right"><div class="v">${esc(peso(v))}</div><div class="s">${(v / total * 100).toFixed(1)}%</div></div></button>`;
+/* ---------- Reports ---------- */
+const INFLOW_EXCLUDE = new Set(['Set-up', 'Lending Receivables', 'Allowance for Bad Debts']); // opening balances and loan principal aren't income
+const fmtK = n => { const a = Math.abs(n); const b = a >= 1e6 ? (a / 1e6).toFixed(a >= 1e7 ? 0 : 1) + 'M' : a >= 1e3 ? (a / 1e3).toFixed(a >= 1e4 ? 0 : 1) + 'k' : a.toFixed(0); return n < -0.004 ? `(₱${b})` : `₱${b}`; };
+function monthKeys(n, skipCurrent) {
+  const out = []; const now = new Date();
+  for (let i = n - (skipCurrent ? 0 : 1); i >= (skipCurrent ? 1 : 0); i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+  }
+  return out;
+}
+const monLabel = (ym, long) => new Date(+ym.slice(0, 4), +ym.slice(5) - 1, 1).toLocaleDateString('en-US', long ? { month: 'long', year: 'numeric' } : { month: 'short' });
+let R = null;
+function reportData() {
+  if (R && R.D === derived()) return R;
+  const x = derived(); const flow = {};
+  rows.concat(x.pend).forEach(r => {
+    const m = String(r.date).slice(0, 7), a = Number(r.amount) || 0;
+    const f = flow[m] || (flow[m] = { in: 0, out: 0, cats: {}, srcs: {} });
+    if (r.type === 'Inflow' && !INFLOW_EXCLUDE.has(clean(r.source))) { f.in += a; f.srcs[clean(r.source)] = (f.srcs[clean(r.source)] || 0) + a; }
+    else if (r.type === 'Outflows' && !x.accounts.has(clean(r.dest))) { f.out += a; f.cats[clean(r.dest)] = (f.cats[clean(r.dest)] || 0) + a; }
+  });
+  const get = m => flow[m] || { in: 0, out: 0, cats: {}, srcs: {} };
+  // category averages over complete months, like the Dashboard's 3/6/12-month averages
+  const avg = n => { const ms = monthKeys(n, true); const c = {}; ms.forEach(m => Object.entries(get(m).cats).forEach(([k, v]) => c[k] = (c[k] || 0) + v)); Object.keys(c).forEach(k => c[k] /= n); return c; };
+  R = { D: x, get, avg: { 3: avg(3), 6: avg(6), 12: avg(12) } };
+  return R;
+}
+function liquidSeries(days) {
+  const liq = new Set(); snap.dashboard.groups.forEach(g => { if (/wallet|saving|credit/i.test(g.label)) g.items.forEach(it => liq.add(clean(it.name))); });
+  const start = isoDay(-(days - 1)), today = isoDay(0); const delta = {}; let v = 0;
+  rows.concat(derived().pend).forEach(r => {
+    const a = Number(r.amount) || 0; let d = 0;
+    if (liq.has(clean(r.dest))) d += a; if (liq.has(clean(r.source))) d -= a;
+    if (!d || r.date > today) return;
+    if (r.date < start) v += d; else delta[r.date] = (delta[r.date] || 0) + d;
+  });
+  const pts = []; for (let i = days - 1; i >= 0; i--) { const day = isoDay(-i); v += delta[day] || 0; pts.push({ day, v: r2(v) }); }
+  return pts;
+}
+function barSVG(months, get, sel) {
+  const W = 340, H = 170, pb = 20, pt = 14, n = months.length, cw = W / n, bw = Math.min(13, cw * 0.3);
+  const max = Math.max(1, ...months.map(m => Math.max(get(m).in, get(m).out)));
+  const y = v => pt + (H - pt - pb) * (1 - v / max);
+  let s = `<line x1="0" x2="${W}" y1="${pt}" y2="${pt}" stroke="var(--line)" stroke-dasharray="3 3"/><text x="${W}" y="${pt - 4}" text-anchor="end" font-size="10" fill="var(--faint)">${fmtK(max)}</text>`;
+  months.forEach((m, i) => {
+    const cx = cw * i + cw / 2, f = get(m);
+    s += `<g data-m="${m}" style="cursor:pointer"><rect x="${cw * i + 1}" y="0" width="${cw - 2}" height="${H}" rx="6" fill="${sel === m ? 'var(--chip)' : 'transparent'}"/>
+      <rect x="${cx - bw - 1}" y="${y(f.in)}" width="${bw}" height="${Math.max(0, H - pb - y(f.in))}" rx="2" fill="var(--in)"/>
+      <rect x="${cx + 1}" y="${y(f.out)}" width="${bw}" height="${Math.max(0, H - pb - y(f.out))}" rx="2" fill="var(--c3)"/>
+      <text x="${cx}" y="${H - 6}" text-anchor="middle" font-size="10" fill="${sel === m ? 'var(--ink)' : 'var(--muted)'}">${monLabel(m)}</text></g>`;
+  });
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;overflow:visible">${s}<line x1="0" x2="${W}" y1="${H - pb}" y2="${H - pb}" stroke="var(--line)"/></svg>`;
+}
+function lineSVG(pts) {
+  const W = 340, H = 150, pt = 10, pb = 18;
+  const vs = pts.map(p => p.v); let mn = Math.min(...vs), mx = Math.max(...vs); if (mx - mn < 1) { mx += 1; mn -= 1; }
+  const X = i => W * i / Math.max(1, pts.length - 1), Y = v => pt + (H - pt - pb) * (1 - (v - mn) / (mx - mn));
+  const d = pts.map((p, i) => (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(p.v).toFixed(1)).join('');
+  const zero = mn < 0 && mx > 0 ? `<line x1="0" x2="${W}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--neg)" stroke-dasharray="3 3" opacity=".6"/>` : '';
+  const last = pts.length - 1;
+  return `<svg id="lnSvg" viewBox="0 0 ${W} ${H}" width="100%" style="display:block;overflow:visible;touch-action:pan-y">
+    <path d="${d}L${W} ${H - pb}L0 ${H - pb}Z" fill="var(--accent)" opacity=".12"/>${zero}
+    <path d="${d}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/>
+    <line id="lnCur" x1="${X(last)}" x2="${X(last)}" y1="${pt}" y2="${H - pb}" stroke="var(--faint)" stroke-width="1"/>
+    <circle id="lnDot" cx="${X(last)}" cy="${Y(pts[last].v)}" r="4" fill="var(--accent)" stroke="var(--card)" stroke-width="2"/>
+    <text x="0" y="${H - 4}" font-size="10" fill="var(--muted)">${esc(shortISO(pts[0].day))}</text>
+    <text x="${W}" y="${H - 4}" font-size="10" fill="var(--muted)" text-anchor="end">Today</text>
+    <text x="0" y="${pt - 2}" font-size="10" fill="var(--faint)">${fmtK(mx)}</text></svg>`;
+}
+const shortISO = s => { const d = parseISO(s); return d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : s; };
+function hbars(entries, max, fmt) {
+  return entries.map(([n, v, sub]) => `<div style="margin-top:12px"><div style="display:flex;justify-content:space-between;gap:10px;font-size:14.5px"><span>${esc(n)}</span><span class="num">${esc(fmt(v))}</span></div>
+    ${sub ? `<div class="s muted" style="font-size:12px">${esc(sub)}</div>` : ''}<div class="bar"><i style="width:${Math.max(1, v / max * 100).toFixed(1)}%"></i></div></div>`).join('');
+}
+function renderReports() {
+  const el = $('#v-rep');
+  if (!snap || !rows.length) { el.innerHTML = `<div class="empty">Reports appear after the first sync.</div>`; return; }
+  const n = state.repN || 6; const rd = reportData(); const months = monthKeys(n);
+  const sel = months.includes(state.repSel) ? state.repSel : months[months.length - 1];
+  const f = rd.get(sel);
+  const totIn = months.reduce((a, m) => a + rd.get(m).in, 0), totOut = months.reduce((a, m) => a + rd.get(m).out, 0);
+  const chips = [3, 6, 12].map(k => `<button class="chip${k === n ? ' on' : ''}" data-rn="${k}">${k} months</button>`).join('');
+  const top = (o, k) => Object.entries(o).sort((a, b) => b[1] - a[1]).slice(0, k);
+  let html = `<div class="chips" style="margin-bottom:10px">${chips}</div>`;
+
+  // 1. Cash flow
+  html += `<div class="card pad"><div style="display:flex;justify-content:space-between;align-items:baseline"><b>Cash flow</b>
+      <span class="legend" style="gap:10px"><span><i style="background:var(--in)"></i> Inflows</span><span><i style="background:var(--c3)"></i> Spending</span></span></div>
+    <div class="muted" style="font-size:13px;margin:2px 0 12px">Average per month: in ${esc(peso(totIn / n, { round: true }))}, out ${esc(peso(totOut / n, { round: true }))}, net ${esc(peso((totIn - totOut) / n, { round: true }))}</div>
+    <div id="cfChart">${barSVG(months, rd.get, sel)}</div>
+    <div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px">
+      <div style="display:flex;justify-content:space-between"><b>${esc(monLabel(sel, true))}${sel === x_ym() ? ' (so far)' : ''}</b><span class="num ${f.in - f.out < 0 ? 'v neg' : 'v in'}">${esc(peso(f.in - f.out, { plus: true }))} net</span></div>
+      <div class="kvs"><span>Inflows</span><span class="num">${esc(peso(f.in))}</span></div>
+      ${top(f.srcs, 3).map(([k, v]) => `<div class="kvs sub"><span>${esc(k)}</span><span class="num">${esc(peso(v))}</span></div>`).join('')}
+      <div class="kvs"><span>Spending</span><span class="num">${esc(peso(-f.out))}</span></div>
+      ${top(f.cats, 4).map(([k, v]) => `<div class="kvs sub"><span>${esc(k)}</span><span class="num">${esc(peso(-v))}</span></div>`).join('')}
+      <div class="faint" style="font-size:12px;margin-top:6px">Tap a month to see it. Inflows exclude opening balances and loan principal collected.</div></div></div>`;
+
+  // 2. Liquid balance trend
+  const days = n === 3 ? 92 : n === 6 ? 183 : 365; const pts = liquidSeries(days); state.lnPts = pts;
+  const first = pts[0].v, lastV = pts[pts.length - 1].v;
+  html += `<div class="card pad"><b>Liquid balance</b>
+    <div class="muted" style="font-size:13px;margin:2px 0 4px">Wallets + savings − credit cards, before earmarks. ${esc(peso(lastV - first, { plus: true, round: true }))} over ${n} months.</div>
+    <div id="lnRead" class="num" style="font-weight:650;font-size:20px;margin:6px 0">${esc(peso(lastV))} <span class="muted" style="font-size:13px;font-weight:500">today</span></div>
+    ${lineSVG(pts)}<div class="faint" style="font-size:12px;margin-top:6px">Drag across the chart to read any day.</div></div>`;
+
+  // 3. Spending by category, monthly averages over complete months
+  const av = rd.avg[n]; const cur = rd.get(x_ym()).cats;
+  const cats = Object.entries(av).sort((a, b) => b[1] - a[1]);
+  const maxC = Math.max(1, ...cats.map(c => c[1]));
+  const living = cats.reduce((a, c) => a + c[1], 0);
+  html += `<div class="card pad"><div style="display:flex;justify-content:space-between;align-items:baseline"><b>Spending by category</b><span class="num muted">${esc(peso(living, { round: true }))}/mo</span></div>
+    <div class="muted" style="font-size:13px;margin-top:2px">Monthly average over the last ${n} complete months, like your Dashboard’s living-expense averages.</div>
+    ${cats.length ? hbars(cats.map(([k, v]) => [k, v, `3M ${fmtK(rd.avg[3][k] || 0)} · 6M ${fmtK(rd.avg[6][k] || 0)} · 12M ${fmtK(rd.avg[12][k] || 0)} · this month ${fmtK(cur[k] || 0)}`]), maxC, v => peso(v, { round: true }) + '/mo') : '<div class="empty">No spending in this period.</div>'}</div>`;
+
+  // 4. Inflows by source
+  const srcs = {}; months.forEach(m => Object.entries(rd.get(m).srcs).forEach(([k, v]) => srcs[k] = (srcs[k] || 0) + v));
+  const se = Object.entries(srcs).sort((a, b) => b[1] - a[1]); const maxS = Math.max(1, ...se.map(s => s[1]));
+  html += `<div class="card pad"><div style="display:flex;justify-content:space-between;align-items:baseline"><b>Inflows by source</b><span class="num muted">${esc(peso(totIn, { round: true }))}</span></div>
+    <div class="muted" style="font-size:13px;margin-top:2px">Total over the last ${n} months, including this one.</div>
+    ${se.length ? hbars(se.map(([k, v]) => [k, v, `${(v / (totIn || 1) * 100).toFixed(1)}% · ${fmtK(v / n)}/mo`]), maxS, v => peso(v, { round: true })) : '<div class="empty">No inflows in this period.</div>'}</div>`;
+
+  // 5. Asset mix (Dashboard)
+  const comp = (snap.dashboard.summary || []).filter(s => s.sub && s.value != null && s.value > 0);
+  const tc = comp.reduce((a, b) => a + b.value, 0) || 1;
+  const colors = ['var(--c1)', 'var(--c2)', 'var(--c3)', 'var(--c4)', 'var(--c5)', 'var(--c6)'];
+  const hl = state.highlight, hi = comp.find(c => c.label === hl);
+  if (comp.length) html += `<div class="card pad"><b>Asset mix</b><div class="muted" style="font-size:13px;margin-top:2px">Share of net assets, from the Dashboard.</div>
+    <div class="stack">${comp.map((c, i) => `<button data-hl="${esc(c.label)}" style="flex:${c.value / tc};background:${colors[i % 6]};opacity:${hl && hl !== c.label ? .3 : 1}" aria-label="${esc(c.label)}"></button>`).join('')}</div>
+    <div class="legend">${comp.map((c, i) => `<button data-hl="${esc(c.label)}" class="${hl === c.label ? 'on' : ''}"><i style="background:${colors[i % 6]}"></i>${esc(c.label.replace(' Net of AP', ''))} ${esc(c.pct || '')}</button>`).join('')}</div>
+    ${hi ? `<div style="margin-top:10px;font-size:14px"><b>${esc(hi.label)}</b>: <span class="num">${esc(peso(hi.value))}</span> <span class="muted">(${esc(hi.pct || '')})</span></div>` : ''}</div>`;
+
+  el.innerHTML = html;
+  wireLine();
+}
+const x_ym = () => isoDay(0).slice(0, 7);
+function wireLine() {
+  const svg = $('#lnSvg'); if (!svg) return; const pts = state.lnPts;
+  const W = 340, H = 150, pt = 10, pb = 18;
+  const vs = pts.map(p => p.v); let mn = Math.min(...vs), mx = Math.max(...vs); if (mx - mn < 1) { mx += 1; mn -= 1; }
+  const Y = v => pt + (H - pt - pb) * (1 - (v - mn) / (mx - mn));
+  const move = ev => {
+    const r = svg.getBoundingClientRect(); const cx = (ev.touches ? ev.touches[0].clientX : ev.clientX) - r.left;
+    const i = Math.max(0, Math.min(pts.length - 1, Math.round(cx / r.width * (pts.length - 1)))); const x = W * i / Math.max(1, pts.length - 1);
+    $('#lnCur').setAttribute('x1', x); $('#lnCur').setAttribute('x2', x); $('#lnDot').setAttribute('cx', x); $('#lnDot').setAttribute('cy', Y(pts[i].v));
+    $('#lnRead').innerHTML = `${esc(peso(pts[i].v))} <span class="muted" style="font-size:13px;font-weight:500">${esc(i === pts.length - 1 ? 'today' : dayLabel(pts[i].day))}</span>`;
   };
-  const acctTotal = RECEIVABLE_ACCTS.reduce((a, n) => a + bal(n), 0);
-  el.innerHTML = `<div class="card hero"><div class="label">Owed to you</div><div class="big">${esc(peso(main.reduce((a, [, v]) => a + v, 0)))}</div>
-      <div class="muted" style="font-size:14px">${main.length} ${main.length === 1 ? 'person' : 'people'} · Lending + Other Receivables accounts ${esc(peso(acctTotal))}</div></div>
-    ${x.recDiffs.length ? `<div class="recon bad"><i></i>${x.recDiffs.length} ${x.recDiffs.length === 1 ? 'balance differs' : 'balances differ'} from the Dashboard Receivables list.</div>`
-      : x.dashRec ? `<div class="recon"><i></i>Matches the Dashboard Receivables list.</div>` : ''}
-    <div class="card">${main.map(row).join('') || '<div class="empty">Nothing outstanding.</div>'}</div>
-    ${extra.length ? groupCard('__extra', 'Also open in the log', extra.reduce((a, [, v]) => a + v, 0), extra.map(row).join('')) : ''}
-    <p class="hint">Each person’s balance is the net of rows into and out of Lending Receivables and Other Receivables whose description is their name. Tap a name to see those rows.</p>`;
+  svg.addEventListener('pointermove', move); svg.addEventListener('pointerdown', move);
+  svg.addEventListener('touchmove', move, { passive: true });
 }
 
 /* ---------- Activity ---------- */
@@ -992,7 +1159,7 @@ function renderView() {
   if (state.tab === 'add') { renderAddBanner(); renderAddForm(); renderQueue(); }
   if (state.tab === 'bal') renderBalances();
   if (state.tab === 'act') renderActivity();
-  if (state.tab === 'rec') renderReceivables();
+  if (state.tab === 'rep') renderReports();
 }
 function renderAll() { renderStatus(); renderView(); }
 
@@ -1050,20 +1217,23 @@ $('#queueWrap').onclick = e => {
 };
 
 $('#v-bal').addEventListener('click', e => {
+  if (e.target.closest('summary')) return;
   if (e.target.closest('[data-nca]')) { openNetCash(); return; }
   if (e.target.closest('[data-nl]')) { openNetLiquidity(); return; }
-  const hl = e.target.closest('[data-hl]');
-  if (hl) { state.highlight = state.highlight === hl.dataset.hl ? null : hl.dataset.hl; renderBalances(); return; }
   const a = e.target.closest('[data-acct]');
-  if (a) { state.filter = { q: '', type: 'All', account: a.dataset.acct }; $('#q').value = ''; switchTab('act'); }
+  if (a) { state.filter = { q: '', type: 'All', account: a.dataset.acct }; $('#q').value = ''; switchTab('act'); return; }
+  const w = e.target.closest('[data-who]');
+  if (w) { state.filter = { q: w.dataset.who, type: 'All', account: null }; $('#q').value = w.dataset.who; switchTab('act'); }
 });
-['#v-bal', '#v-rec'].forEach(id => $(id).addEventListener('toggle', e => {
-  const d = e.target; if (!d.dataset || !d.dataset.key) return;
-  if (d.open) delete prefs.closed[d.dataset.key]; else prefs.closed[d.dataset.key] = 1; savePrefs();
-}, true));
-$('#v-rec').addEventListener('click', e => {
-  const w = e.target.closest('[data-who]'); if (!w) return;
-  state.filter = { q: w.dataset.who, type: 'All', account: null }; $('#q').value = w.dataset.who; switchTab('act');
+$('#v-bal').addEventListener('toggle', e => {
+  const d = e.target; if (!d.dataset) return;
+  if (d.dataset.okey) { if (d.open) prefs.open[d.dataset.okey] = 1; else delete prefs.open[d.dataset.okey]; savePrefs(); }
+  else if (d.dataset.key) { if (d.open) delete prefs.closed[d.dataset.key]; else prefs.closed[d.dataset.key] = 1; savePrefs(); }
+}, true);
+$('#v-rep').addEventListener('click', e => {
+  const rn = e.target.closest('[data-rn]'); if (rn) { state.repN = +rn.dataset.rn; renderReports(); return; }
+  const m = e.target.closest('[data-m]'); if (m) { state.repSel = m.dataset.m; renderReports(); return; }
+  const hl = e.target.closest('[data-hl]'); if (hl) { state.highlight = state.highlight === hl.dataset.hl ? null : hl.dataset.hl; renderReports(); }
 });
 let qTimer;
 $('#q').addEventListener('input', () => { clearTimeout(qTimer); qTimer = setTimeout(() => { state.filter.q = clean($('#q').value); renderActivity(); }, 120); });
