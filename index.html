@@ -173,6 +173,16 @@ details.card[open]>summary{border-bottom:1px solid var(--line)}
 .diffrow{padding:10px 16px;border-top:1px solid var(--line);font-size:14px}
 .diffrow b{font-weight:600}
 .flag{color:var(--warn);font-weight:600}
+.bulk{width:100%;min-height:130px;font:13px/1.45 ui-monospace,Menlo,monospace;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);padding:10px;outline:0;resize:vertical}
+.bulk:focus{border-color:var(--accent)}
+.brow,.sheet label.brow{display:flex;gap:10px;align-items:flex-start;padding:10px 0;margin:0;border-bottom:1px solid var(--line)}
+.brow input{width:20px;height:20px;margin:2px 0 0;accent-color:var(--accent);flex:none}
+.brow .grow{flex:1;min-width:0}
+.brow .t{font-size:15px;font-weight:500}
+.brow .s{font-size:12.5px;color:var(--muted)}
+.brow .bad{color:var(--neg);font-size:12.5px}
+.brow .warn{color:var(--warn);font-size:12.5px}
+.bsum{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:12px 0 4px;font-size:14px}
 </style>
 </head>
 <body>
@@ -223,6 +233,8 @@ details.card[open]>summary{border-bottom:1px solid var(--line)}
     </div>
     <button class="primary" id="save">Save</button>
     <p class="hint" id="saveHint">Saved on this phone first, then added to the Transactions tab on the next sync.</p>
+    <button class="secondary" id="bulkBtn" style="margin-bottom:6px">Paste multiple rows</button>
+    <p class="hint" style="margin-top:6px">For rows from Claude’s finance logger, or copied from the sheet.</p>
     <div id="queueWrap"></div>
   </section>
 
@@ -256,7 +268,7 @@ details.card[open]>summary{border-bottom:1px solid var(--line)}
 
 <script>
 'use strict';
-const VERSION = '1.3.1';
+const VERSION = '1.4.0';
 const TYPES = ['Outflows', 'Inflow', 'Transfer'];
 const TYPE_LABEL = { Outflows: 'Outflow', Inflow: 'Inflow', Transfer: 'Transfer' };
 const LS = { cfg: 'ledger.cfg', rows: 'ledger.rows', blocks: 'ledger.blocks', snap: 'ledger.snap', queue: 'ledger.queue', prefs: 'ledger.prefs' };
@@ -801,6 +813,109 @@ function renderActivity() {
   list.innerHTML = acctLine + html + `<p class="hint">${hits.length > 400 ? `Showing the newest 400 of ${hits.length.toLocaleString()} matches.` : `${hits.length.toLocaleString()} ${hits.length === 1 ? 'row' : 'rows'}`} · full log of ${rows.length.toLocaleString()} rows is on this phone.</p>`;
 }
 
+/* ---------- Bulk import ---------- */
+const TYPE_ALIASES = { inflow: 'Inflow', inflows: 'Inflow', income: 'Inflow', outflow: 'Outflows', outflows: 'Outflows', expense: 'Outflows', transfer: 'Transfer', transfers: 'Transfer' };
+function parseDateAny(s) {
+  let m, y, mo, d;
+  if ((m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(s))) { y = +m[1]; mo = +m[2]; d = +m[3]; }
+  else if ((m = /^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/.exec(s))) { mo = +m[1]; d = +m[2]; y = +m[3]; if (y < 100) y += 2000; }
+  else return null;
+  const dt = new Date(y, mo - 1, d);
+  if (dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null;
+  return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+function canon(name, list) { const k = clean(name).toLowerCase(); return list.find(x => clean(x).toLowerCase() === k) || null; }
+function findDup(e) {
+  const t = parseISO(e.date).getTime();
+  const pool = queue.concat(rows.slice().reverse());
+  return pool.find(r => Math.abs((Number(r.amount) || 0) - e.amount) < 0.005 && clean(r.source) === clean(e.source)
+    && Math.abs(parseISO(r.date) - t) <= 7 * 864e5) || null;
+}
+function parseBulk(text) {
+  const map = optMap(); const out = []; const tomorrow = isoDay(1);
+  String(text || '').replace(/\r/g, '').split('\n').forEach((line, i) => {
+    const raw = line.trim();
+    if (!raw || /^```/.test(raw) || /^[-|:\s]+$/.test(raw)) return;
+    let cells = line.split('\t').map(c => c.trim());
+    if (cells.length < 6) cells = raw.replace(/^\|/, '').replace(/\|$/, '').split(/\s*\|\s*|\s{2,}/).map(c => c.trim());
+    while (cells.length && cells[cells.length - 1] === '' && cells.length > 6) cells.pop();
+    if (/^date$/i.test(cells[0] || '') && /type/i.test(cells[2] || '')) return; // header row
+    const r = { line: i + 1, raw, include: false };
+    if (cells.length < 6) { r.error = `Needs 6 columns (Date, Transaction, Type, Source, Destination, Amount); found ${cells.length}`; out.push(r); return; }
+    const [dRaw, desc, tRaw, sRaw, dsRaw, aRaw] = cells;
+    r.date = parseDateAny(dRaw); r.desc = desc;
+    r.type = TYPE_ALIASES[clean(tRaw).toLowerCase()] || null;
+    const amtTxt = String(aRaw).replace(/[₱,\s]/g, '');
+    r.amount = /^\(.*\)$/.test(amtTxt) ? -Number(amtTxt.slice(1, -1)) : Number(amtTxt);
+    if (!r.date) r.error = `Date “${dRaw}” isn’t MM/DD/YY`;
+    else if (!desc) r.error = 'Transaction description is empty';
+    else if (!r.type) r.error = `Type “${tRaw}” must be Inflow, Outflows or Transfer`;
+    else if (!isFinite(r.amount) || r.amount <= 0) r.error = `Amount “${aRaw}” must be a positive number`;
+    else {
+      r.amount = r2(r.amount);
+      r.source = canon(sRaw, Object.keys(map[r.type] || {}));
+      if (r.source && RETIRED.has(clean(r.source))) r.error = `${clean(r.source)} is retired as a source`;
+      else if (!r.source) r.error = `“${sRaw}” isn’t a valid source for ${r.type} in the Data tab`;
+      else {
+        r.dest = canon(dsRaw, map[r.type][r.source]);
+        if (!r.dest) r.error = `${clean(r.source)} → “${dsRaw}” isn’t a valid pair in the Data tab`;
+      }
+    }
+    if (!r.error) {
+      r.dup = findDup(r);
+      if (r.date > tomorrow) r.future = true;
+      r.include = !r.dup;
+    }
+    out.push(r);
+  });
+  return out;
+}
+function openBulk() {
+  if (!snap) { toast('Sync once first so the app knows your accounts', 'err'); return; }
+  let parsed = parseBulk(state.bulkText || '');
+  openSheet(`<h2>Paste multiple rows</h2>
+    <p>Six tab-separated columns per line: Date, Transaction, Type, Source, Destination, Amount. Header lines and code fences are ignored.</p>
+    <textarea class="bulk" id="bText" placeholder="10/25/26	7-Eleven Sampaloc	Outflows	Cash	Food and Drinks	290" autocapitalize="off" autocorrect="off" spellcheck="false">${esc(state.bulkText || '')}</textarea>
+    <div class="btns" style="grid-template-columns:1fr 1fr;margin-top:8px"><button class="secondary" id="bPaste">Paste</button><button class="secondary" id="bClear">Clear</button></div>
+    <div class="bsum"><span id="bSum" class="muted"></span><button class="primary" id="bImport" style="width:auto;padding:11px 18px;white-space:nowrap;flex:none">Import</button></div>
+    <div id="bList"></div>
+    <div class="btns"><button class="secondary" id="closeS">Close</button></div>`);
+  const draw = () => {
+    const ok = parsed.filter(r => !r.error), inc = ok.filter(r => r.include), bad = parsed.length - ok.length, dups = ok.filter(r => r.dup).length;
+    const out = inc.filter(r => r.type === 'Outflows').reduce((a, r) => a + r.amount, 0);
+    $('#bSum').textContent = parsed.length ? `${inc.length} of ${parsed.length} selected${bad ? ` · ${bad} with errors` : ''}${dups ? ` · ${dups} possible duplicate${dups > 1 ? 's' : ''}` : ''}${out ? ` · ${peso(out)} out` : ''}` : 'Nothing pasted yet';
+    $('#bImport').disabled = !inc.length;
+    $('#bImport').textContent = inc.length ? `Import ${inc.length}` : 'Import';
+    $('#bList').innerHTML = parsed.map((r, i) => r.error
+      ? `<div class="brow"><input type="checkbox" disabled><div class="grow"><div class="t" style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px;word-break:break-all">${esc(r.raw)}</div><div class="bad">Line ${r.line}: ${esc(r.error)}</div></div></div>`
+      : `<label class="brow"><input type="checkbox" data-bi="${i}" ${r.include ? 'checked' : ''}><div class="grow"><div class="t">${esc(r.desc)}</div>
+          <div class="s">${esc(dayLabel(r.date))} · ${esc(TYPE_LABEL[r.type])} · ${esc(clean(r.source))} → ${esc(clean(r.dest))}</div>
+          ${r.dup ? `<div class="warn">Possible duplicate of ${r.dup.row ? 'row ' + r.dup.row : 'a queued entry'}: ${esc(r.dup.desc)}, ${esc(dayLabel(r.dup.date))}. Tick to import anyway.</div>` : ''}
+          ${r.future ? `<div class="warn">Date is in the future.</div>` : ''}</div>
+          <div class="v num" style="font-weight:600;font-size:15px">${esc(r.type === 'Outflows' ? peso(-r.amount) : r.type === 'Inflow' ? peso(r.amount, { plus: true }) : peso(r.amount))}</div></label>`).join('');
+  };
+  let tmr;
+  const reparse = () => { state.bulkText = $('#bText').value; parsed = parseBulk(state.bulkText); draw(); };
+  $('#bText').addEventListener('input', () => { clearTimeout(tmr); tmr = setTimeout(reparse, 200); });
+  $('#bList').addEventListener('change', e => { const c = e.target.closest('[data-bi]'); if (c) { parsed[+c.dataset.bi].include = c.checked; draw(); } });
+  $('#bPaste').onclick = async () => {
+    try { const t = await navigator.clipboard.readText(); $('#bText').value = ($('#bText').value ? $('#bText').value + '\n' : '') + t; reparse(); }
+    catch (e) { toast('Clipboard not available. Long-press the box and tap Paste.', 'err'); }
+  };
+  $('#bClear').onclick = () => { $('#bText').value = ''; reparse(); };
+  $('#bImport').onclick = () => {
+    const inc = parsed.filter(r => !r.error && r.include); if (!inc.length) return;
+    const base = Date.now();
+    inc.forEach((r, k) => queue.push({ id: uid(), date: r.date, desc: r.desc, type: r.type, source: r.source, dest: r.dest, amount: r.amount, createdAt: base + k, status: 'pending' }));
+    saveQueue(); state.bulkText = '';
+    $('#sheet').classList.remove('on'); $('#scrim').classList.remove('on');
+    toast(`${inc.length} ${inc.length === 1 ? 'row' : 'rows'} saved${navigator.onLine ? ', sending' : '. They send when you’re back online'}`);
+    renderAll(); flush();
+  };
+  $('#closeS').onclick = closeSheet;
+  draw();
+}
+
 /* ---------- sheets (modals) ---------- */
 function openSheet(html) { $('#sheet').innerHTML = `<div class="grab"></div>` + html; $('#sheet').classList.add('on'); $('#scrim').classList.add('on'); }
 function closeSheet() { if (!cfg) return; $('#sheet').classList.remove('on'); $('#scrim').classList.remove('on'); }
@@ -918,6 +1033,7 @@ $('#save').onclick = () => {
   renderAll(); flush();
 };
 
+$('#bulkBtn').onclick = () => openBulk();
 $('#queueWrap').onclick = e => {
   const b = e.target.closest('[data-q]'); if (!b) return;
   const i = queue.findIndex(x => x.id === b.dataset.id); if (i < 0) return;
