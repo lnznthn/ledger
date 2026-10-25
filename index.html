@@ -255,7 +255,7 @@ details.card[open]>summary{border-bottom:1px solid var(--line)}
 
 <script>
 'use strict';
-const VERSION = '1.1.0';
+const VERSION = '1.2.0';
 const TYPES = ['Outflows', 'Inflow', 'Transfer'];
 const TYPE_LABEL = { Outflows: 'Outflow', Inflow: 'Inflow', Transfer: 'Transfer' };
 const LS = { cfg: 'ledger.cfg', rows: 'ledger.rows', blocks: 'ledger.blocks', snap: 'ledger.snap', queue: 'ledger.queue', prefs: 'ledger.prefs' };
@@ -624,15 +624,20 @@ function renderBalances() {
   const others = [...x.accounts].filter(a => !placed.has(a) && !RECEIVABLE_ACCTS.includes(a) && Math.abs(bal(a)) >= 0.5).sort();
   if (others.length) cardGroups.push({ label: 'Other accounts in the log', items: others.map(n => ({ name: n })) });
 
-  const liquid = cardGroups.filter(g => /wallet|saving/i.test(g.label)).flatMap(g => g.items).reduce((a, it) => a + bal(it.name), 0);
   const cards = cardGroups.filter(g => /credit/i.test(g.label)).flatMap(g => g.items).reduce((a, it) => a + bal(it.name), 0);
+  // Net liquidity, same rule as the Dashboard: wallets (non-earmarked part, ₱1 or less counts as 0) + savings + credit cards
+  const nl = netLiquidity(dash, earmarks);
+  const sheetNL = sum['Net Liquidity'];
+  const nlOff = sheetNL && sheetNL.value != null && Math.abs(nl.synced - sheetNL.value) > TOL;
+  const netVal = net && net.value != null ? net.value + pendNet : null;
   const monthName = parseISO(x.ym + '-01').toLocaleDateString('en-US', { month: 'long' });
 
   let html = `<div class="card hero">
     <div class="label">Net assets${x.pend.length ? ' · incl. queued' : ''}</div>
-    <div class="big">${esc(peso(net && net.value != null ? net.value + pendNet : null))}</div>
+    <div class="big">${esc(peso(netVal))}</div>
     <div class="stats">
-      <div><div class="label">Wallets + savings</div><div class="v">${esc(peso(liquid, { round: true }))}</div></div>
+      <button data-nl="1" style="text-align:left"><div class="label">Net liquidity</div><div class="v ${nl.live < 0 ? 'neg' : ''}">${esc(peso(nl.live, { round: true }))}</div>
+        <div class="s muted" style="font-size:12.5px">${netVal ? esc((nl.live / netVal * 100).toFixed(1)) + '% of net assets' : ''}${nlOff ? ` · <span class="flag">Dashboard ${esc(peso(sheetNL.value, { round: true }))}</span>` : ''}</div></button>
       <div><div class="label">${esc(monthName)} spending</div><div class="v">${esc(peso(x.monthTotal, { round: true }))}</div></div>
       ${cards ? `<div><div class="label">Credit cards</div><div class="v ${cards < 0 ? 'neg' : ''}">${esc(peso(cards, { round: true }))}</div></div>` : ''}
       <div><div class="label">Owed to you</div><div class="v">${esc(peso(Object.values(x.recv).filter(v => v >= TOL).reduce((a, b) => a + b, 0), { round: true }))}</div></div>
@@ -675,6 +680,33 @@ function renderBalances() {
   }
   html += `<p class="hint">Account balances are computed on this phone from the log. An amber dot means the account’s last update is over ${STALE_DAYS} days old. Tap an account to see its rows.</p>`;
   el.innerHTML = html;
+}
+
+function netLiquidity(dash, earmarks) {
+  const parts = { Wallets: { live: 0, synced: 0 }, Savings: { live: 0, synced: 0 }, 'Credit cards': { live: 0, synced: 0 } };
+  const syn = name => r2(derived().synced[clean(name)] || 0);
+  (dash.groups || []).forEach(g => {
+    const key = /wallet/i.test(g.label) ? 'Wallets' : /saving/i.test(g.label) ? 'Savings' : /credit/i.test(g.label) ? 'Credit cards' : null;
+    if (!key) return;
+    g.items.forEach(it => {
+      const n = clean(it.name), e = key === 'Wallets' ? (earmarks[n] || 0) : 0;
+      const f = v => key === 'Wallets' ? (v - e > TOL ? v - e : 0) : v;
+      parts[key].live += f(bal(n)); parts[key].synced += f(syn(n));
+    });
+  });
+  const live = Object.values(parts).reduce((a, p) => a + p.live, 0), synced = Object.values(parts).reduce((a, p) => a + p.synced, 0);
+  return { live: r2(live), synced: r2(synced), parts };
+}
+function openNetLiquidity() {
+  const dash = snap.dashboard; const earmarks = {};
+  dash.groups.filter(g => EARMARK.test(g.label)).forEach(g => g.items.forEach(it => earmarks[clean(it.name)] = it.value));
+  const nl = netLiquidity(dash, earmarks); const s = (dash.summary || []).find(x => x.label === 'Net Liquidity');
+  openSheet(`<h2>Net liquidity</h2><p>Wallets (excluding earmarked amounts) plus savings plus credit card balances, the same rule as your Dashboard.</p>
+    ${Object.entries(nl.parts).map(([k, p]) => `<div class="kv"><span>${esc(k)}</span><span class="num">${esc(peso(p.live))}</span></div>`).join('')}
+    <div class="kv"><span><b>Total</b></span><span class="num"><b>${esc(peso(nl.live))}</b></span></div>
+    ${s ? `<p style="margin-top:12px">Dashboard shows ${esc(peso(s.value))}${s.pct ? ' (' + esc(s.pct) + ' of net assets)' : ''}.${nl.live !== nl.synced ? ' The figure above includes entries still queued on this phone.' : ''}</p>` : ''}
+    <div class="btns"><button class="secondary" id="closeS">Close</button></div>`);
+  $('#closeS').onclick = closeSheet;
 }
 
 /* ---------- Owed ---------- */
@@ -879,6 +911,7 @@ $('#queueWrap').onclick = e => {
 };
 
 $('#v-bal').addEventListener('click', e => {
+  if (e.target.closest('[data-nl]')) { openNetLiquidity(); return; }
   const hl = e.target.closest('[data-hl]');
   if (hl) { state.highlight = state.highlight === hl.dataset.hl ? null : hl.dataset.hl; renderBalances(); return; }
   const a = e.target.closest('[data-acct]');
