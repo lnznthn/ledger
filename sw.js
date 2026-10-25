@@ -1,7 +1,7 @@
 // Ledger service worker: keeps the app's own files on the phone so it opens
 // instantly and works offline. Data requests to the sheet are not cached here;
 // the app stores its data itself.
-const CACHE = 'ledger-v1.2.0';
+const CACHE = 'ledger-v1.3.0';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', e => {

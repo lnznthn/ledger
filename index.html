@@ -133,6 +133,7 @@ details.card[open]>summary{border-bottom:1px solid var(--line)}
 
 /* balances */
 .hero{padding:18px 16px 16px}
+.hero .big.neg{color:var(--neg)}
 .hero .big{font-family:var(--num);font-size:36px;font-weight:700;letter-spacing:-.02em;margin:2px 0 14px;font-variant-numeric:tabular-nums}
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px}
 .stats .v{font-family:var(--num);font-weight:650;font-size:17px;font-variant-numeric:tabular-nums}
@@ -255,7 +256,7 @@ details.card[open]>summary{border-bottom:1px solid var(--line)}
 
 <script>
 'use strict';
-const VERSION = '1.2.0';
+const VERSION = '1.3.0';
 const TYPES = ['Outflows', 'Inflow', 'Transfer'];
 const TYPE_LABEL = { Outflows: 'Outflow', Inflow: 'Inflow', Transfer: 'Transfer' };
 const LS = { cfg: 'ledger.cfg', rows: 'ledger.rows', blocks: 'ledger.blocks', snap: 'ledger.snap', queue: 'ledger.queue', prefs: 'ledger.prefs' };
@@ -630,17 +631,24 @@ function renderBalances() {
   const sheetNL = sum['Net Liquidity'];
   const nlOff = sheetNL && sheetNL.value != null && Math.abs(nl.synced - sheetNL.value) > TOL;
   const netVal = net && net.value != null ? net.value + pendNet : null;
+  // Net cash available, same rule as the Dashboard: net liquidity minus Allocated Cash
+  const alloc = dash.groups.find(g => /allocated/i.test(g.label));
+  const allocTotal = alloc ? (alloc.total != null ? alloc.total : alloc.items.reduce((a, it) => a + it.value, 0)) : 0;
+  const nca = r2(nl.live - allocTotal);
   const monthName = parseISO(x.ym + '-01').toLocaleDateString('en-US', { month: 'long' });
 
   let html = `<div class="card hero">
-    <div class="label">Net assets${x.pend.length ? ' · incl. queued' : ''}</div>
-    <div class="big">${esc(peso(netVal))}</div>
+    <button data-nca="1" style="text-align:left;display:block;width:100%">
+      <div class="label">Net cash available${x.pend.length ? ' · incl. queued' : ''}</div>
+      <div class="big ${nca < 0 ? 'neg' : ''}" style="margin-bottom:2px">${esc(peso(nca))}</div>
+      <div class="muted" style="font-size:13px;margin-bottom:14px">Net liquidity ${esc(peso(nl.live, { round: true }))} − allocated ${esc(peso(allocTotal, { round: true }))}</div>
+    </button>
     <div class="stats">
       <button data-nl="1" style="text-align:left"><div class="label">Net liquidity</div><div class="v ${nl.live < 0 ? 'neg' : ''}">${esc(peso(nl.live, { round: true }))}</div>
         <div class="s muted" style="font-size:12.5px">${netVal ? esc((nl.live / netVal * 100).toFixed(1)) + '% of net assets' : ''}${nlOff ? ` · <span class="flag">Dashboard ${esc(peso(sheetNL.value, { round: true }))}</span>` : ''}</div></button>
       <div><div class="label">${esc(monthName)} spending</div><div class="v">${esc(peso(x.monthTotal, { round: true }))}</div></div>
       ${cards ? `<div><div class="label">Credit cards</div><div class="v ${cards < 0 ? 'neg' : ''}">${esc(peso(cards, { round: true }))}</div></div>` : ''}
-      <div><div class="label">Owed to you</div><div class="v">${esc(peso(Object.values(x.recv).filter(v => v >= TOL).reduce((a, b) => a + b, 0), { round: true }))}</div></div>
+      <div><div class="label">Net assets</div><div class="v">${esc(peso(netVal, { round: true }))}</div></div>
     </div>
     ${comp.length ? `<div class="stack">${comp.map((c, i) => `<button data-hl="${esc(c.label)}" style="flex:${c.value / totalComp};background:${colors[i % 6]};opacity:${hl && hl !== c.label ? .3 : 1}" aria-label="${esc(c.label)}"></button>`).join('')}</div>
     <div class="legend">${comp.map((c, i) => `<button data-hl="${esc(c.label)}" class="${hl === c.label ? 'on' : ''}"><i style="background:${colors[i % 6]}"></i>${esc(c.label.replace(' Net of AP', ''))} ${esc(c.pct || '')}</button>`).join('')}</div>
@@ -696,6 +704,20 @@ function netLiquidity(dash, earmarks) {
   });
   const live = Object.values(parts).reduce((a, p) => a + p.live, 0), synced = Object.values(parts).reduce((a, p) => a + p.synced, 0);
   return { live: r2(live), synced: r2(synced), parts };
+}
+function openNetCash() {
+  const dash = snap.dashboard; const earmarks = {};
+  dash.groups.filter(g => EARMARK.test(g.label)).forEach(g => g.items.forEach(it => earmarks[clean(it.name)] = it.value));
+  const nl = netLiquidity(dash, earmarks);
+  const alloc = dash.groups.find(g => /allocated/i.test(g.label)) || { items: [], total: 0 };
+  const allocTotal = alloc.total != null ? alloc.total : alloc.items.reduce((a, it) => a + it.value, 0);
+  openSheet(`<h2>Net cash available</h2><p>Net liquidity minus cash you’ve allocated, the same rule as your Dashboard. Allocations come from the Dashboard’s Allocated Cash block.</p>
+    <div class="kv"><span>Net liquidity</span><span class="num">${esc(peso(nl.live))}</span></div>
+    ${alloc.items.map(it => `<div class="kv"><span style="padding-left:12px">− ${esc(it.name)}</span><span class="num">${esc(peso(-it.value))}</span></div>`).join('')}
+    <div class="kv"><span><b>Net cash available</b></span><span class="num"><b>${esc(peso(r2(nl.live - allocTotal)))}</b></span></div>
+    <div class="btns"><button class="secondary" id="sNL">Net liquidity breakdown</button><button class="secondary" id="closeS">Close</button></div>`);
+  $('#sNL').onclick = openNetLiquidity;
+  $('#closeS').onclick = closeSheet;
 }
 function openNetLiquidity() {
   const dash = snap.dashboard; const earmarks = {};
@@ -911,6 +933,7 @@ $('#queueWrap').onclick = e => {
 };
 
 $('#v-bal').addEventListener('click', e => {
+  if (e.target.closest('[data-nca]')) { openNetCash(); return; }
   if (e.target.closest('[data-nl]')) { openNetLiquidity(); return; }
   const hl = e.target.closest('[data-hl]');
   if (hl) { state.highlight = state.highlight === hl.dataset.hl ? null : hl.dataset.hl; renderBalances(); return; }
