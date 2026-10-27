@@ -121,9 +121,9 @@ The sheet has four slots for them, Dashboard `K21:L24`, directly under the Accou
 
 `apps-script/allocations.gs` holds the server side: `setAllocs_` builds the formulas itself from validated items (no client-supplied formula text reaches the sheet), and `getAllocs_` returns each slot's name, formula and value. `parseAllocSlot` reads a slot back into lines. It accepts `N`, `(N*0)`, `N*0` and `(N)*0` terms, treats a slot whose name count doesn't match its terms as one line, and treats a typed number as one included line, so slots edited by hand in the sheet still read in. Names therefore cannot contain a comma or a plus sign.
 
-Edits are saved on the phone first (`allocs.pending`) and sent as the whole list on the next sync, so the phone's list wins over hand edits made in the sheet since the last sync. Until the script is deployed, `getAllocs` fails, the card shows the Dashboard's values read-only, and editing stays off.
+Edits are saved on the phone first (`allocs.pending`) and sent as the whole list on the next sync, so the phone's list wins over hand edits made in the sheet since the last sync. If the script ever stops answering these actions, `getAllocs` fails, the card falls back to the Dashboard's values read-only, and editing turns off until a sync succeeds again.
 
-**Deploying the script:** paste `allocations.gs` into the sheet's Apps Script project and route the two actions from `doPost` to `getAllocs_()` and `setAllocs_(body.slots)`, inside the same key check and JSON envelope as the existing actions. Then redeploy the web app as a new version of the same deployment so the `/exec` URL stays the same.
+**Deployment (done Oct 27, 2026):** `allocations.gs` sits beside `Code.gs` in the sheet's Apps Script project, and `doPost`'s switch routes `case 'getAllocs': return json_({ ok: true, data: getAllocs_() });` and `case 'setAllocs': return json_({ ok: true, data: setAllocs_(body.slots) });` inside the same key check as the other actions. Any later change to the script must be redeployed through Deploy → Manage deployments → edit → New version, which keeps the `/exec` URL; a new deployment would change it.
 
 ### Balance sheet (Balances tab)
 
