@@ -95,7 +95,7 @@ The app reads the restricted amounts from the Dashboard (`earmarkMap`) and never
 
 ### The liquidity cascade
 
-These definitions are the owner's and must not drift. `cascade(dash)` computes all of them for Balances; `netLiqSeries` applies the same rule day by day for Reports.
+These definitions are the owner's and must not drift. `cascade(dash)` computes all of them for Balances; `liqLedger` applies the same maintaining-balance rule day by day for Reports.
 
 | Figure | Rule |
 | --- | --- |
@@ -109,9 +109,18 @@ Sources: Restricted cash comes from the Dashboard; allocations come from the app
 
 The Dashboard's own Net Liquidity and Net Cash Available cells still use an older definition (no short-term investments, AP inside allocations), so the app no longer compares against them. Per-account reconciliation still runs.
 
-### Net liquidity trend (Reports)
+### Cash flow and the liquidity line (Reports)
 
-`netLiqSeries(days)` rebuilds Net liquidity for each day from rows dated up to today. For history it needs the maintaining-balance rule per day: a wallet whose earmark equals its whole balance today is treated as an unused account and fully restricted on every day; any other earmark is treated as a cap, so the wallet contributes `walletNet(raw, min(raw, cap))`. Accounts payable, savings, short-term investments and credit cards are summed directly. The card under the chart shows today's cascade and notes any entries dated after today (counted in Balances, left off the line), which are the only reason the line's last point can differ from the Balances figure.
+The owner's rule, set Oct 27, 2026: the Cash flow chart shows actual liquidity movements, and the line beside it must reconcile with it. Both come from `liqLedger(start)`, one pass over the log.
+
+- **The pool** is wallets (net of maintaining balances), savings, short-term investments and credit cards. Accounts payable is outside it. A credit card purchase reduces liquidity when it is made, because card debt is as good as cash spent; paying the card moves money inside the pool and shows nothing.
+- **Each row's effect** is the pool's value after the row less its value before. A positive effect is a **collection** and a negative one a **disbursement**. So salary into a bank is a collection, and an expense on a bank or card is a disbursement. A transfer from Lending Receivables into a bank is a collection, and lending out is a disbursement. Accrued income (Lending Income → Lending Receivables) and transfers between pool accounts are zero. Spending funded by Accounts Payable is zero, and paying the payable from a pool account is the disbursement. Borrowing into a bank through Accounts Payable is a collection.
+- **Maintaining balances** follow the same per-day rule the line uses. A wallet whose earmark equals its whole balance today is an unused account, fully restricted on every day; any other earmark is a cap, and only the excess counts. Money moved into a maintaining balance is therefore a disbursement, labelled "Maintaining balances".
+- **The line** is *Liquidity before payables*: liquid assets less restricted cash and credit cards, which is Net liquidity plus accounts payable. It starts on the first day of the earliest month shown. Over any window, collections less disbursements equal the line's last value less its opening value exactly. Today's value equals Balances' Net liquidity plus accounts payable. The card under the line bridges that figure to Net liquidity.
+- **Rows dated after today** are left out of both charts, and the card notes their amount.
+- The line card heads with the **average monthly net effect for each calendar quarter** in the window. It uses only the months shown, and marks the current quarter "so far".
+
+Spending by category and Inflows by source still use `reportData` (Outflows into non-accounts, and income by source) and are not liquidity measures.
 
 ### Cash allocations
 
@@ -135,9 +144,10 @@ Per-person receivables are tracked by **description**: for rows whose Source or 
 
 ### Reports
 
-- **Cash flow**: monthly inflows and spending. Inflows exclude `Set-up` (opening balances), `Lending Receivables` and `Allowance for Bad Debts` (`INFLOW_EXCLUDE`). Spending is Outflows into non-accounts, and never includes Outflows into `Allowance for Bad Debts`.
-- **Netted accruals**: interest on a loan that is fully provided for is logged as a pair on the same date with the same description and amount: an Inflow `Lending Income` → `Lending Receivables` and an Outflow `Lending Receivables` → `Allowance for Bad Debts`. No cash moves, so `reportData` drops the `Lending Income` half of every such pair from inflows and from Inflows by source. When those debts are recovered, the owner replaces the paired rows with ordinary `Lending Income` rows on the cadence the money actually arrives; those have no matching provision and count as inflows. Balances are unaffected, because each pair nets to zero in `Lending Receivables`.
-- **Net liquidity**: daily trend line, described above.
+- **Cash flow**: monthly collections and disbursements, described above.
+- **Spending by category / Inflows by source** (`reportData`): inflows exclude `Set-up` (opening balances), `Lending Receivables` and `Allowance for Bad Debts` (`INFLOW_EXCLUDE`); spending is Outflows into non-accounts and never includes Outflows into `Allowance for Bad Debts`.
+- **Netted accruals**: interest on a loan that is fully provided for is logged as a pair on the same date with the same description and amount: an Inflow `Lending Income` → `Lending Receivables` and an Outflow `Lending Receivables` → `Allowance for Bad Debts`. No cash moves, so `reportData` drops the `Lending Income` half of every such pair from Inflows by source (the Cash flow chart never counts accruals at all). When those debts are recovered, the owner replaces the paired rows with ordinary `Lending Income` rows on the cadence the money actually arrives; those have no matching provision and count as inflows. Balances are unaffected, because each pair nets to zero in `Lending Receivables`.
+- **Liquidity before payables**: daily line, described above.
 - **Spending by category**: monthly averages over the last 3, 6 or 12 complete months.
 - **Inflows by source**: totals over the selected window, including the current month.
 - **Asset mix**: straight from the Dashboard summary rows marked as sub-items.
@@ -166,3 +176,4 @@ Per-person receivables are tracked by **description**: for rows whose Source or 
 | 1.7.1 | Network-first page loading and an update check on resume, so new versions arrive on the next open |
 | 1.7.2 | Reports leave out netted accruals (Lending Income paired with an equal Allowance for Bad Debts provision) |
 | 1.7.3 | Per-person receivables match names case-insensitively, like the Dashboard |
+| 1.8.0 | Cash flow becomes collections and disbursements of liquidity; the line becomes Liquidity before payables and reconciles with the bars; quarterly average monthly net effect |

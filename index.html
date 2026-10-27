@@ -289,7 +289,7 @@ details.card[open]>summary{border-bottom:1px solid var(--line)}
 
 <script>
 'use strict';
-const VERSION = '1.7.3';
+const VERSION = '1.8.0';
 const TYPES = ['Outflows', 'Inflow', 'Transfer'];
 const TYPE_LABEL = { Outflows: 'Outflow', Inflow: 'Inflow', Transfer: 'Transfer' };
 const LS = { cfg: 'ledger.cfg', rows: 'ledger.rows', blocks: 'ledger.blocks', snap: 'ledger.snap', queue: 'ledger.queue', prefs: 'ledger.prefs', allocs: 'ledger.allocs' };
@@ -910,44 +910,69 @@ function reportData() {
   R = { D: x, get, avg: { 3: avg(3), 6: avg(6), 12: avg(12) } };
   return R;
 }
-/** Daily Net liquidity from the log, same cascade as Balances (rows dated after today are left off the line).
- *  Maintaining balances: a wallet whose earmark equals its whole balance today is an unused account, so it is
- *  fully restricted on every day; otherwise the earmark is a cap, and only the excess over it counts. */
-function netLiqSeries(days) {
+/** Collections, disbursements and the liquidity line from one pass over the log, so they reconcile by construction.
+ *  The pool is wallets (net of maintaining balances), savings, short-term investments and credit cards. Accounts
+ *  payable is outside it: spending funded by a payable moves nothing until the payable is paid from the pool.
+ *  Each row's effect is the pool's value after the row less its value before, so accruals and transfers inside the
+ *  pool are zero, and money moved into a maintaining balance reads as a disbursement. Rows dated after today are left
+ *  out of both. Maintaining balances: a wallet whose earmark equals its whole balance today is an unused account, so
+ *  it is fully restricted on every day; otherwise the earmark is a cap, and only the excess over it counts. */
+let LQ = null;
+function liqLedger(start) {
+  const x = derived();
+  if (LQ && LQ.D === x && LQ.start === start) return LQ;
   const dash = snap.dashboard; const em = earmarkMap(dash);
-  const walletModes = {};
-  groupItems(dash, /wallet/i).forEach(it => { const n = clean(it.name), e = em[n] || 0; walletModes[n] = !e ? 0 : Math.abs(bal(n) - e) <= TOL ? 'full' : e; });
-  const linear = {};  // sign applied to each non-wallet account's balance
-  groupItems(dash, /saving/i).concat(groupItems(dash, /short term/i), groupItems(dash, /credit/i)).forEach(it => linear[clean(it.name)] = 1);
-  linear[AP_NAME] = 1;    // credit-normal: its log balance is already negative when money is owed
-  const track = new Set(Object.keys(walletModes).concat(Object.keys(linear)));
-  const start = isoDay(-(days - 1)), today = isoDay(0); const run = {}; const delta = {};
+  const modes = {};
+  groupItems(dash, /wallet/i).forEach(it => { const n = clean(it.name), e = em[n] || 0; modes[n] = !e ? 0 : Math.abs(bal(n) - e) <= TOL ? 'full' : e; });
+  const linear = new Set();
+  groupItems(dash, /saving/i).concat(groupItems(dash, /short term/i), groupItems(dash, /credit/i)).forEach(it => { const n = clean(it.name); if (!(n in modes)) linear.add(n); });
+  const tracked = n => n in modes || linear.has(n);
+  const worth = (n, raw) => n in modes ? (modes[n] === 'full' ? 0 : walletNet(raw, modes[n] ? Math.min(raw, modes[n]) : 0)) : linear.has(n) ? raw : 0;
+  const today = isoDay(0); const run = {}; const dayDelta = {}; const flow = {};
+  const all = rows.map((r, i) => [r, i]).concat(x.pend.map((r, i) => [r, rows.length + i]))
+    .filter(([r]) => r.date <= today).sort((p, q) => p[0].date < q[0].date ? -1 : p[0].date > q[0].date ? 1 : p[1] - q[1]).map(p => p[0]);
   const add = (o, k, v) => o[k] = (o[k] || 0) + v;
-  rows.concat(derived().pend).forEach(r => {
-    const a = Number(r.amount) || 0, d = clean(r.dest), sc = clean(r.source);
-    if (r.date > today || (!track.has(d) && !track.has(sc))) return;
-    const tgt = r.date < start ? run : (delta[r.date] = delta[r.date] || {});
-    if (track.has(d)) add(tgt, d, a); if (track.has(sc)) add(tgt, sc, -a);
+  all.forEach(r => {
+    const sc = clean(r.source), d = clean(r.dest), a = Number(r.amount) || 0;
+    if (!tracked(sc) && !tracked(d)) return;
+    const names = sc === d ? [sc] : [sc, d];
+    const before = names.reduce((v, n) => v + worth(n, run[n] || 0), 0);
+    run[d] = (run[d] || 0) + a; run[sc] = (run[sc] || 0) - a;
+    if (r.date < start) return;
+    const delta = r2(names.reduce((v, n) => v + worth(n, run[n] || 0), 0) - before);
+    if (Math.abs(delta) < 0.005) return;
+    add(dayDelta, r.date, delta);
+    const m = r.date.slice(0, 7), f = flow[m] || (flow[m] = { in: 0, out: 0, srcs: {}, cats: {} });
+    const label = tracked(d) && !tracked(sc) ? sc : tracked(sc) && !tracked(d) ? d : 'Maintaining balances';
+    if (delta > 0) { f.in += delta; add(f.srcs, label, delta); } else { f.out -= delta; add(f.cats, label, -delta); }
   });
-  const value = () => {
-    let v = 0;
-    for (const n in walletModes) { const raw = run[n] || 0, m = walletModes[n]; v += m === 'full' ? 0 : walletNet(raw, m ? Math.min(raw, m) : 0); }
-    for (const n in linear) v += run[n] || 0;
-    return r2(v);
-  };
-  const pts = [];
-  for (let k = days - 1; k >= 0; k--) { const day = isoDay(-k); const dd = delta[day]; if (dd) for (const n in dd) add(run, n, dd[n]); pts.push({ day, v: value() }); }
-  return pts;
+  // value at the start of the window, then one point per day
+  let v = 0; for (const n in run) v += worth(n, run[n]);
+  // run now holds today's balances; step back to the window start by removing in-window effects
+  const inWindow = Object.values(dayDelta).reduce((s2, z) => s2 + z, 0);
+  v = r2(v - inWindow);
+  const base = v; const pts = []; const days = Math.round((parseISO(today) - parseISO(start)) / 864e5) + 1;
+  for (let k = days - 1; k >= 0; k--) { const day = isoDay(-k); v = r2(v + (dayDelta[day] || 0)); pts.push({ day, v }); }
+  const get = m => flow[m] || { in: 0, out: 0, srcs: {}, cats: {} };
+  LQ = { D: x, start, base, pts, get };
+  return LQ;
 }
 function netLiqTodayHTML(lastV) {
-  const c = cascade(snap.dashboard); const future = r2(c.nl - lastV);
+  const c = cascade(snap.dashboard); const beforeAP = r2(c.nl + c.ap); const future = r2(beforeAP - lastV);
   return `<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px"><b style="font-size:14.5px">Today</b>
     <div class="kvs"><span>Liquid assets</span><span class="num">${esc(peso(c.liquid))}</span></div>
     <div class="kvs sub"><span>Less restricted cash</span><span class="num">${esc(peso(-c.restricted))}</span></div>
-    <div class="kvs sub"><span>Less accounts payable</span><span class="num">${esc(peso(-c.ap))}</span></div>
     <div class="kvs sub"><span>Less credit cards owed</span><span class="num">${esc(peso(-c.cards))}</span></div>
-    <div class="kvs"><span><b>Net liquidity</b> <span class="muted" style="font-size:12.5px">(Balances)</span></span><span class="num"><b>${esc(peso(c.nl))}</b></span></div>
-    ${Math.abs(future) >= 0.005 ? `<div class="faint" style="font-size:12px;margin-top:4px">Includes ${esc(peso(future, { plus: true }))} from entries dated after today, which the line leaves off.</div>` : ''}</div>`;
+    <div class="kvs"><span><b>Liquidity before payables</b></span><span class="num"><b>${esc(peso(beforeAP))}</b></span></div>
+    <div class="kvs sub"><span>Less accounts payable</span><span class="num">${esc(peso(-c.ap))}</span></div>
+    <div class="kvs"><span>Net liquidity <span class="muted" style="font-size:12.5px">(Balances)</span></span><span class="num">${esc(peso(c.nl))}</span></div>
+    ${Math.abs(future) >= 0.005 ? `<div class="faint" style="font-size:12px;margin-top:4px">Includes ${esc(peso(future, { plus: true }))} from entries dated after today, which the charts leave off.</div>` : ''}</div>`;
+}
+/** Average monthly net effect for each calendar quarter in the window (months in the window only; the current one so far). */
+function quarterAverages(months, get) {
+  const q = {}; const order = [];
+  months.forEach(m => { const k = `Q${Math.floor((+m.slice(5) - 1) / 3) + 1} ${m.slice(0, 4)}`; if (!q[k]) { q[k] = { sum: 0, n: 0, cur: false }; order.push(k); } const f = get(m); q[k].sum += f.in - f.out; q[k].n++; if (m === x_ym()) q[k].cur = true; });
+  return order.map(k => ({ label: k + (q[k].cur ? ' (so far)' : ''), avg: q[k].sum / q[k].n }));
 }
 function barSVG(months, get, sel) {
   const W = 340, H = 170, pb = 20, pt = 14, n = months.length, cw = W / n, bw = Math.min(13, cw * 0.3);
@@ -988,31 +1013,42 @@ function renderReports() {
   const el = $('#v-rep');
   if (!snap || !rows.length) { el.innerHTML = `<div class="empty">Reports appear after the first sync.</div>`; return; }
   const n = state.repN || 6; const rd = reportData(); const months = monthKeys(n);
+  const L = liqLedger(months[0] + '-01'); const cf = L.get;
   const sel = months.includes(state.repSel) ? state.repSel : months[months.length - 1];
-  const f = rd.get(sel);
-  const totIn = months.reduce((a, m) => a + rd.get(m).in, 0), totOut = months.reduce((a, m) => a + rd.get(m).out, 0);
+  const f = cf(sel);
+  const totIn = months.reduce((a, m) => a + rd.get(m).in, 0);
+  const colIn = months.reduce((a, m) => a + cf(m).in, 0), colOut = months.reduce((a, m) => a + cf(m).out, 0);
   const chips = [3, 6, 12].map(k => `<button class="chip${k === n ? ' on' : ''}" data-rn="${k}">${k} months</button>`).join('');
   const top = (o, k) => Object.entries(o).sort((a, b) => b[1] - a[1]).slice(0, k);
   let html = `<div class="chips" style="margin-bottom:10px">${chips}</div>`;
 
+  // the line's value at the start and end of the selected month, to show the bars and the line agree
+  const pts = L.pts; state.lnPts = pts;
+  const at = day => { let v = null; for (const p of pts) { if (p.day > day) break; v = p.v; } return v; };
+  const mStart = sel + '-01', prevDay = isoDayOf(parseISO(mStart), -1);
+  const openV = mStart <= pts[0].day ? L.base : at(prevDay);
+  const closeV = at(sel === x_ym() ? isoDay(0) : monthEnd(sel));
+
   // 1. Cash flow
   html += `<div class="card pad"><div style="display:flex;justify-content:space-between;align-items:baseline"><b>Cash flow</b>
-      <span class="legend" style="gap:10px"><span><i style="background:var(--in)"></i> Inflows</span><span><i style="background:var(--c3)"></i> Spending</span></span></div>
-    <div class="muted" style="font-size:13px;margin:2px 0 12px">Average per month: in ${esc(peso(totIn / n, { round: true }))}, out ${esc(peso(totOut / n, { round: true }))}, net ${esc(peso((totIn - totOut) / n, { round: true }))}</div>
-    <div id="cfChart">${barSVG(months, rd.get, sel)}</div>
+      <span class="legend" style="gap:10px"><span><i style="background:var(--in)"></i> Collections</span><span><i style="background:var(--c3)"></i> Disbursements</span></span></div>
+    <div class="muted" style="font-size:13px;margin:2px 0 12px">Average per month: collections ${esc(peso(colIn / n, { round: true }))}, disbursements ${esc(peso(colOut / n, { round: true }))}, net ${esc(peso((colIn - colOut) / n, { round: true, plus: true }))}</div>
+    <div id="cfChart">${barSVG(months, cf, sel)}</div>
     <div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px">
       <div style="display:flex;justify-content:space-between"><b>${esc(monLabel(sel, true))}${sel === x_ym() ? ' (so far)' : ''}</b><span class="num ${f.in - f.out < 0 ? 'v neg' : 'v in'}">${esc(peso(f.in - f.out, { plus: true }))} net</span></div>
-      <div class="kvs"><span>Inflows</span><span class="num">${esc(peso(f.in))}</span></div>
-      ${top(f.srcs, 3).map(([k, v]) => `<div class="kvs sub"><span>${esc(k)}</span><span class="num">${esc(peso(v))}</span></div>`).join('')}
-      <div class="kvs"><span>Spending</span><span class="num">${esc(peso(-f.out))}</span></div>
-      ${top(f.cats, 4).map(([k, v]) => `<div class="kvs sub"><span>${esc(k)}</span><span class="num">${esc(peso(-v))}</span></div>`).join('')}
-      <div class="faint" style="font-size:12px;margin-top:6px">Tap a month to see it. Inflows exclude opening balances and loan principal collected.</div></div></div>`;
+      <div class="kvs"><span>Collections</span><span class="num">${esc(peso(f.in))}</span></div>
+      ${top(f.srcs, 4).map(([k, v]) => `<div class="kvs sub"><span>${esc(k)}</span><span class="num">${esc(peso(v))}</span></div>`).join('')}
+      <div class="kvs"><span>Disbursements</span><span class="num">${esc(peso(-f.out))}</span></div>
+      ${top(f.cats, 5).map(([k, v]) => `<div class="kvs sub"><span>${esc(k)}</span><span class="num">${esc(peso(-v))}</span></div>`).join('')}
+      ${openV != null && closeV != null ? `<div class="kvs" style="margin-top:6px"><span class="muted">Liquidity before payables</span><span class="num muted">${esc(peso(openV))} → ${esc(peso(closeV))}</span></div>` : ''}
+      <div class="faint" style="font-size:12px;margin-top:6px">Tap a month to see it. Collections and disbursements are money entering or leaving your liquid accounts and cards. Card purchases count when made; card payments, transfers between your own liquid accounts and accrued income don't count; payables count when you pay them.</div></div></div>`;
 
-  // 2. Net liquidity trend
-  const days = n === 3 ? 92 : n === 6 ? 183 : 365; const pts = netLiqSeries(days); state.lnPts = pts;
-  const first = pts[0].v, lastV = pts[pts.length - 1].v;
-  html += `<div class="card pad"><b>Net liquidity</b>
-    <div class="muted" style="font-size:13px;margin:2px 0 4px">Liquid assets less restricted cash, accounts payable and credit cards. ${esc(peso(lastV - first, { plus: true, round: true }))} over ${n} months.</div>
+  // 2. Liquidity trend: the bars above, accumulated
+  const lastV = pts[pts.length - 1].v;
+  const qs = quarterAverages(months, cf);
+  html += `<div class="card pad"><b>Liquidity before payables</b>
+    <div class="muted" style="font-size:13px;margin:2px 0 4px">Liquid assets less restricted cash and credit cards. It moves only with the collections and disbursements above.</div>
+    <div style="margin:6px 0 2px">${qs.map(q => `<div class="kvs sub"><span>${esc(q.label)}</span><span class="num v ${q.avg < 0 ? 'neg' : 'in'}">${esc(peso(q.avg, { plus: true, round: true }))} per month</span></div>`).join('')}</div>
     <div id="lnRead" class="num" style="font-weight:650;font-size:20px;margin:6px 0">${esc(peso(lastV))} <span class="muted" style="font-size:13px;font-weight:500">today</span></div>
     ${lineSVG(pts)}<div class="faint" style="font-size:12px;margin-top:6px">Drag across the chart to read any day.</div>
     ${netLiqTodayHTML(lastV)}</div>`;
@@ -1047,6 +1083,8 @@ function renderReports() {
   wireLine();
 }
 const x_ym = () => isoDay(0).slice(0, 7);
+const isoDayOf = (d, off) => { const z = new Date(d); z.setDate(z.getDate() + off); return `${z.getFullYear()}-${String(z.getMonth() + 1).padStart(2, '0')}-${String(z.getDate()).padStart(2, '0')}`; };
+const monthEnd = ym => isoDayOf(new Date(+ym.slice(0, 4), +ym.slice(5), 1), -1);
 function wireLine() {
   const svg = $('#lnSvg'); if (!svg) return; const pts = state.lnPts;
   const W = 340, H = 150, pt = 10, pb = 18;
