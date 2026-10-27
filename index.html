@@ -289,7 +289,7 @@ details.card[open]>summary{border-bottom:1px solid var(--line)}
 
 <script>
 'use strict';
-const VERSION = '1.8.0';
+const VERSION = '1.8.1';
 const TYPES = ['Outflows', 'Inflow', 'Transfer'];
 const TYPE_LABEL = { Outflows: 'Outflow', Inflow: 'Inflow', Transfer: 'Transfer' };
 const LS = { cfg: 'ledger.cfg', rows: 'ledger.rows', blocks: 'ledger.blocks', snap: 'ledger.snap', queue: 'ledger.queue', prefs: 'ledger.prefs', allocs: 'ledger.allocs' };
@@ -907,7 +907,7 @@ function reportData() {
   const get = m => flow[m] || { in: 0, out: 0, cats: {}, srcs: {} };
   // category averages over complete months, like the Dashboard's 3/6/12-month averages
   const avg = n => { const ms = monthKeys(n, true); const c = {}; ms.forEach(m => Object.entries(get(m).cats).forEach(([k, v]) => c[k] = (c[k] || 0) + v)); Object.keys(c).forEach(k => c[k] /= n); return c; };
-  R = { D: x, get, avg: { 3: avg(3), 6: avg(6), 12: avg(12) } };
+  R = { D: x, get, avg: { 3: avg(3), 6: avg(6), 12: avg(12), 18: avg(18) } };
   return R;
 }
 /** Collections, disbursements and the liquidity line from one pass over the log, so they reconcile by construction.
@@ -978,14 +978,16 @@ function barSVG(months, get, sel) {
   const W = 340, H = 170, pb = 20, pt = 14, n = months.length, cw = W / n, bw = Math.min(13, cw * 0.3);
   const max = Math.max(1, ...months.map(m => Math.max(get(m).in, get(m).out)));
   const y = v => pt + (H - pt - pb) * (1 - v / max);
-  let s = `<line x1="0" x2="${W}" y1="${pt}" y2="${pt}" stroke="var(--line)" stroke-dasharray="3 3"/><text x="${W}" y="${pt - 4}" text-anchor="end" font-size="10" fill="var(--faint)">${fmtK(max)}</text>`;
+  let s = '';
   months.forEach((m, i) => {
     const cx = cw * i + cw / 2, f = get(m);
-    s += `<g data-m="${m}" style="cursor:pointer"><rect x="${cw * i + 1}" y="0" width="${cw - 2}" height="${H}" rx="6" fill="${sel === m ? 'var(--chip)' : 'transparent'}"/>
+    const showLbl = n <= 12 || (n - 1 - i) % 2 === 0 || sel === m;
+    s += `<g data-m="${m}" style="cursor:pointer"><rect x="${cw * i + 1}" y="${pt + 2}" width="${cw - 2}" height="${H - pt - 2}" rx="6" fill="${sel === m ? 'var(--chip)' : 'transparent'}"/>
       <rect x="${cx - bw - 1}" y="${y(f.in)}" width="${bw}" height="${Math.max(0, H - pb - y(f.in))}" rx="2" fill="var(--in)"/>
       <rect x="${cx + 1}" y="${y(f.out)}" width="${bw}" height="${Math.max(0, H - pb - y(f.out))}" rx="2" fill="var(--c3)"/>
-      <text x="${cx}" y="${H - 6}" text-anchor="middle" font-size="10" fill="${sel === m ? 'var(--ink)' : 'var(--muted)'}">${monLabel(m)}</text></g>`;
+      ${showLbl ? `<text x="${cx}" y="${H - 6}" text-anchor="middle" font-size="10" fill="${sel === m ? 'var(--ink)' : 'var(--muted)'}">${monLabel(m)}</text>` : ''}</g>`;
   });
+  s += `<line x1="0" x2="${W}" y1="${pt}" y2="${pt}" stroke="var(--line)" stroke-dasharray="3 3" pointer-events="none"/><text x="${W}" y="${pt - 4}" text-anchor="end" font-size="10" fill="var(--faint)" pointer-events="none">${fmtK(max)}</text>`;
   return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;overflow:visible">${s}<line x1="0" x2="${W}" y1="${H - pb}" y2="${H - pb}" stroke="var(--line)"/></svg>`;
 }
 function lineSVG(pts) {
@@ -1009,16 +1011,20 @@ function hbars(entries, max, fmt) {
   return entries.map(([n, v, sub]) => `<div style="margin-top:12px"><div style="display:flex;justify-content:space-between;gap:10px;font-size:14.5px"><span>${esc(n)}</span><span class="num">${esc(fmt(v))}</span></div>
     ${sub ? `<div class="s muted" style="font-size:12px">${esc(sub)}</div>` : ''}<div class="bar"><i style="width:${Math.max(1, v / max * 100).toFixed(1)}%"></i></div></div>`).join('');
 }
+const REP_SPANS = [3, 6, 12, 18];
 function renderReports() {
   const el = $('#v-rep');
   if (!snap || !rows.length) { el.innerHTML = `<div class="empty">Reports appear after the first sync.</div>`; return; }
-  const n = state.repN || 6; const rd = reportData(); const months = monthKeys(n);
+  const n = REP_SPANS.includes(state.repN) ? state.repN : 6; const rd = reportData(); const months = monthKeys(n);
   const L = liqLedger(months[0] + '-01'); const cf = L.get;
   const sel = months.includes(state.repSel) ? state.repSel : months[months.length - 1];
   const f = cf(sel);
   const totIn = months.reduce((a, m) => a + rd.get(m).in, 0);
   const colIn = months.reduce((a, m) => a + cf(m).in, 0), colOut = months.reduce((a, m) => a + cf(m).out, 0);
-  const chips = [3, 6, 12].map(k => `<button class="chip${k === n ? ' on' : ''}" data-rn="${k}">${k} months</button>`).join('');
+  const chips = REP_SPANS.map(k => `<button class="chip${k === n ? ' on' : ''}" data-rn="${k}">${k} months</button>`).join('');
+  const miniChips = REP_SPANS.map(k => `<button class="chip${k === n ? ' on' : ''}" data-rn="${k}" style="padding:4px 10px;font-size:12.5px">${k}M</button>`).join('');
+  const shown = k => !prefs.closed['rep.' + k];
+  const detBtn = k => `<button class="linkbtn" data-det="${k}" style="background:none;border:0;padding:6px 0 0;color:var(--accent);font-size:13px;font-weight:600;cursor:pointer">${shown(k) ? 'Hide details' : 'Show details'}</button>`;
   const top = (o, k) => Object.entries(o).sort((a, b) => b[1] - a[1]).slice(0, k);
   let html = `<div class="chips" style="margin-bottom:10px">${chips}</div>`;
 
@@ -1036,22 +1042,23 @@ function renderReports() {
     <div id="cfChart">${barSVG(months, cf, sel)}</div>
     <div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px">
       <div style="display:flex;justify-content:space-between"><b>${esc(monLabel(sel, true))}${sel === x_ym() ? ' (so far)' : ''}</b><span class="num ${f.in - f.out < 0 ? 'v neg' : 'v in'}">${esc(peso(f.in - f.out, { plus: true }))} net</span></div>
-      <div class="kvs"><span>Collections</span><span class="num">${esc(peso(f.in))}</span></div>
+      ${shown('cf') ? `<div class="kvs"><span>Collections</span><span class="num">${esc(peso(f.in))}</span></div>
       ${top(f.srcs, 4).map(([k, v]) => `<div class="kvs sub"><span>${esc(k)}</span><span class="num">${esc(peso(v))}</span></div>`).join('')}
       <div class="kvs"><span>Disbursements</span><span class="num">${esc(peso(-f.out))}</span></div>
       ${top(f.cats, 5).map(([k, v]) => `<div class="kvs sub"><span>${esc(k)}</span><span class="num">${esc(peso(-v))}</span></div>`).join('')}
       ${openV != null && closeV != null ? `<div class="kvs" style="margin-top:6px"><span class="muted">Liquidity before payables</span><span class="num muted">${esc(peso(openV))} → ${esc(peso(closeV))}</span></div>` : ''}
-      <div class="faint" style="font-size:12px;margin-top:6px">Tap a month to see it. Collections and disbursements are money entering or leaving your liquid accounts and cards. Card purchases count when made; card payments, transfers between your own liquid accounts and accrued income don't count; payables count when you pay them.</div></div></div>`;
+      <div class="faint" style="font-size:12px;margin-top:6px">Tap a month to see it. Collections and disbursements are money entering or leaving your liquid accounts and cards. Card purchases count when made; card payments, transfers between your own liquid accounts and accrued income don't count; payables count when you pay them.</div>` : ''}
+      ${detBtn('cf')}</div></div>`;
 
   // 2. Liquidity trend: the bars above, accumulated
   const lastV = pts[pts.length - 1].v;
   const qs = quarterAverages(months, cf);
-  html += `<div class="card pad"><b>Liquidity before payables</b>
-    <div class="muted" style="font-size:13px;margin:2px 0 4px">Liquid assets less restricted cash and credit cards. It moves only with the collections and disbursements above.</div>
+  html += `<div class="card pad"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><b>Liquidity before payables</b><span style="display:flex;gap:4px">${miniChips}</span></div>
+    <div class="muted" style="font-size:13px;margin:2px 0 4px">Liquid assets less restricted cash and credit cards. It moves only with the collections and disbursements above, over the same months.</div>
     <div style="margin:6px 0 2px">${qs.map(q => `<div class="kvs sub"><span>${esc(q.label)}</span><span class="num v ${q.avg < 0 ? 'neg' : 'in'}">${esc(peso(q.avg, { plus: true, round: true }))} per month</span></div>`).join('')}</div>
     <div id="lnRead" class="num" style="font-weight:650;font-size:20px;margin:6px 0">${esc(peso(lastV))} <span class="muted" style="font-size:13px;font-weight:500">today</span></div>
-    ${lineSVG(pts)}<div class="faint" style="font-size:12px;margin-top:6px">Drag across the chart to read any day.</div>
-    ${netLiqTodayHTML(lastV)}</div>`;
+    ${lineSVG(pts)}${shown('ln') ? `<div class="faint" style="font-size:12px;margin-top:6px">Drag across the chart to read any day.</div>
+    ${netLiqTodayHTML(lastV)}` : ''}${detBtn('ln')}</div>`;
 
   // 3. Spending by category, monthly averages over complete months
   const av = rd.avg[n]; const cur = rd.get(x_ym()).cats;
@@ -1397,6 +1404,7 @@ $('#v-bal').addEventListener('toggle', e => {
 }, true);
 $('#v-rep').addEventListener('click', e => {
   const rn = e.target.closest('[data-rn]'); if (rn) { state.repN = +rn.dataset.rn; renderReports(); return; }
+  const dt = e.target.closest('[data-det]'); if (dt) { const k = 'rep.' + dt.dataset.det; if (prefs.closed[k]) delete prefs.closed[k]; else prefs.closed[k] = 1; savePrefs(); renderReports(); return; }
   const m = e.target.closest('[data-m]'); if (m) { state.repSel = m.dataset.m; renderReports(); return; }
   const hl = e.target.closest('[data-hl]'); if (hl) { state.highlight = state.highlight === hl.dataset.hl ? null : hl.dataset.hl; renderReports(); }
 });

@@ -18,7 +18,7 @@ The back end is a Google Apps Script web app (`Code.gs`) bound to the spreadshee
 
 1. Bump `VERSION` in `index.html`.
 2. Bump `CACHE` in `sw.js` to the same version (`ledger-vX.Y.Z`). The browser only installs a new service worker when the bytes of `sw.js` change, so skipping this means phones keep the old app.
-3. Never commit an empty or truncated `sw.js`. Version 1.3.1 shipped an empty `sw.js` by accident and offline launch was broken until 1.5.2 restored it.
+3. Never commit an empty or truncated `sw.js`. Versions 1.3.1 and 1.8.0 each shipped an empty `sw.js` by accident (1.8.0's came from a script that opened the file for writing before reading it), breaking offline launch until 1.5.2 and 1.8.1 restored it. Check `test -s sw.js && node --check sw.js` before every commit.
 4. Check the script parses, for example `node -e "const h=require('fs').readFileSync('index.html','utf8');new Function(h.slice(h.indexOf('<script>')+8,h.lastIndexOf('</script>')))"`.
 5. Commit and push to `main`. From v1.7.1, the next launch or resume with signal runs the new version. Earlier versions were cache-first and needed two launches.
 
@@ -177,3 +177,4 @@ Per-person receivables are tracked by **description**: for rows whose Source or 
 | 1.7.2 | Reports leave out netted accruals (Lending Income paired with an equal Allowance for Bad Debts provision) |
 | 1.7.3 | Per-person receivables match names case-insensitively, like the Dashboard |
 | 1.8.0 | Cash flow becomes collections and disbursements of liquidity; the line becomes Liquidity before payables and reconciles with the bars; quarterly average monthly net effect |
+| 1.8.1 | 18-month span; span chips on the liquidity card; Hide/Show details on both cards; month highlight no longer covers the chart's top label; restores `sw.js`, which 1.8.0 shipped empty |
