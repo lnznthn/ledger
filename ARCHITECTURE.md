@@ -12,7 +12,7 @@ This repository is public and served by GitHub Pages. Keep balances, account num
 | `sw.js` | Service worker. Caches the app shell so it opens instantly and works offline. Never caches sheet data. |
 | `manifest.webmanifest`, `icons/` | Home-screen install metadata. |
 
-The back end is a Google Apps Script web app (`Code.gs`) bound to the spreadsheet. Its source is **not** in this repo; it lives in the sheet's Apps Script project (Extensions → Apps Script). Changing it needs the owner's Google sign-in. Changes to this repo need only a push to `main`; GitHub Pages republishes in about a minute.
+The back end is a Google Apps Script web app (`Code.gs`) bound to the spreadsheet. Apart from `apps-script/allocations.gs`, its source is **not** in this repo; it lives in the sheet's Apps Script project (Extensions → Apps Script). Changing it needs the owner's Google sign-in. Changes to this repo need only a push to `main`; GitHub Pages republishes in about a minute.
 
 ### Release checklist
 
@@ -50,6 +50,8 @@ All calls are `POST` to the Apps Script `/exec` URL with a `text/plain` JSON bod
 | `ping` | none | used by Settings to test the URL and key |
 | `sync` | `have`: `{ blockStartRow: hash }` from the last sync | `{ rows, blocks, lastRow, options, dashboard, bufferRows, syncedAt }` |
 | `add` | `entries`: queued entries with client `id`s, plus `have` | `{ results: [{ id, ok, error }], sync: <same as sync> }` |
+| `getAllocs` | none | the four allocation slots, `[{ name, formula, value }]` |
+| `setAllocs` | `slots`: four arrays of `{ name, amount, on }` | the slots as written, same shape as `getAllocs` |
 
 The log is sent in fixed blocks of rows, each with a hash. The phone sends the hashes it holds; the server returns only rows in blocks whose hash changed, and `applySync` replaces those blocks locally and drops rows past `lastRow`. "Re-download the full log" in Settings clears the hashes to force a full pull.
 
@@ -100,16 +102,28 @@ These definitions are the owner's and must not drift. `cascade(dash)` computes a
 | Wallets, net | Each Wallets account's balance less its maintaining balance; a result of ₱1 or less (including negatives) shows as ₱0. |
 | **Liquid assets** | Wallets, net + Restricted cash + Savings + Short-term investments. Long-term investments, receivables and ventures are not liquid. |
 | **Net liquidity** | Liquid assets − Restricted cash − Accounts payable − Credit cards owed. |
-| **Net cash available** | Net liquidity − cash allocations. Allocations are the Dashboard's Allocated Cash lines **excluding Accounts Payable**, which is already deducted in Net liquidity. This is the Balances headline. |
+| **Net cash available** | Net liquidity − cash allocations. Allocations are the app's included allocation lines (see Cash allocations), which never include Accounts Payable since it is already deducted in Net liquidity. This is the Balances headline. |
 | **Net assets** | Total assets − total liabilities from the balance sheet below. |
 
-Sources: Restricted cash and the allocation amounts come from the Dashboard. Accounts payable is the log's `Accounts Payable` account, which is credit-normal (money owed makes its Destination − Source balance negative); the app negates it, and falls back to the Dashboard line only if the log never touches the account. Everything else is the app's own log math.
+Sources: Restricted cash comes from the Dashboard; allocations come from the app's own list, synced with the Dashboard's allocation slots. Accounts payable is the log's `Accounts Payable` account, which is credit-normal (money owed makes its Destination − Source balance negative); the app negates it, and falls back to the Dashboard line only if the log never touches the account. Everything else is the app's own log math.
 
 The Dashboard's own Net Liquidity and Net Cash Available cells still use an older definition (no short-term investments, AP inside allocations), so the app no longer compares against them. Per-account reconciliation still runs.
 
 ### Net liquidity trend (Reports)
 
 `netLiqSeries(days)` rebuilds Net liquidity for each day from rows dated up to today. For history it needs the maintaining-balance rule per day: a wallet whose earmark equals its whole balance today is treated as an unused account and fully restricted on every day; any other earmark is treated as a cap, so the wallet contributes `walletNet(raw, min(raw, cap))`. Accounts payable, savings, short-term investments and credit cards are summed directly. The card under the chart shows today's cascade and notes any entries dated after today (counted in Balances, left off the line), which are the only reason the line's last point can differ from the Balances figure.
+
+### Cash allocations
+
+The app owns the list of cash allocations (`ledger.allocs`): one line per allocation with a name, a whole-peso amount and an include toggle, edited from the Cash allocations card on Balances. Only included lines count in Net cash available.
+
+The sheet has four slots for them, Dashboard `K21:L24`, directly under the Accounts Payable row (`K20:L20`, a log `SUMIF` the app never writes). `packAllocs` spreads the list across the slots in order, as evenly as possible with the larger groups first (nine lines become 3 + 2 + 2 + 2). Each slot's name cell joins its names with ", " and its amount cell is a formula joining the amounts with "+"; an excluded amount is written `(N*0)` so it stays visible but adds nothing. Example: `Emergency Fund, House Balance` / `=360000+(523013*0)`. The Dashboard's `=SUM(L20:L24)` total keeps working, and the app never shows the per-slot sums.
+
+`apps-script/allocations.gs` holds the server side: `setAllocs_` builds the formulas itself from validated items (no client-supplied formula text reaches the sheet), and `getAllocs_` returns each slot's name, formula and value. `parseAllocSlot` reads a slot back into lines. It accepts `N`, `(N*0)`, `N*0` and `(N)*0` terms, treats a slot whose name count doesn't match its terms as one line, and treats a typed number as one included line, so slots edited by hand in the sheet still read in. Names therefore cannot contain a comma or a plus sign.
+
+Edits are saved on the phone first (`allocs.pending`) and sent as the whole list on the next sync, so the phone's list wins over hand edits made in the sheet since the last sync. Until the script is deployed, `getAllocs` fails, the card shows the Dashboard's values read-only, and editing stays off.
+
+**Deploying the script:** paste `allocations.gs` into the sheet's Apps Script project and route the two actions from `doPost` to `getAllocs_()` and `setAllocs_(body.slots)`, inside the same key check and JSON envelope as the existing actions. Then redeploy the web app as a new version of the same deployment so the `/exec` URL stays the same.
 
 ### Balance sheet (Balances tab)
 
@@ -147,3 +161,4 @@ Per-person receivables are tracked by **description**: for rows whose Source or 
 | 1.5.1 | Tab order: Reports first, Add last |
 | 1.5.2 | Liquid balance → Net liquidity bridge on Reports; `sw.js` restored; this document |
 | 1.6.0 | Liquidity cascade redefined (short-term investments liquid, AP out of allocations); Reports trend line is Net liquidity; Dashboard summary-cell comparison dropped |
+| 1.7.0 | Cash allocations editor with include toggle, packed into the Dashboard's four allocation slots |

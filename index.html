@@ -289,10 +289,10 @@ details.card[open]>summary{border-bottom:1px solid var(--line)}
 
 <script>
 'use strict';
-const VERSION = '1.6.0';
+const VERSION = '1.7.0';
 const TYPES = ['Outflows', 'Inflow', 'Transfer'];
 const TYPE_LABEL = { Outflows: 'Outflow', Inflow: 'Inflow', Transfer: 'Transfer' };
-const LS = { cfg: 'ledger.cfg', rows: 'ledger.rows', blocks: 'ledger.blocks', snap: 'ledger.snap', queue: 'ledger.queue', prefs: 'ledger.prefs' };
+const LS = { cfg: 'ledger.cfg', rows: 'ledger.rows', blocks: 'ledger.blocks', snap: 'ledger.snap', queue: 'ledger.queue', prefs: 'ledger.prefs', allocs: 'ledger.allocs' };
 const TITLES = { add: 'Add', bal: 'Balances', act: 'Activity', rep: 'Reports' };
 const STALE_DAYS = 21;
 const TOL = 1;                                   // Dashboard shows ₱0 for wallet balances of ₱1 or less
@@ -478,6 +478,7 @@ async function sync() {
   try {
     if (queue.some(e => e.status !== 'failed')) await flush(true);
     else { applySync(await api('sync', { have: blocks })); state.lastError = null; }
+    await syncAllocs();
   } catch (e) { onError(e); }
   finally { state.syncing = false; renderAll(); }
 }
@@ -713,6 +714,8 @@ function renderBalances() {
     </div>
   </div>`;
 
+  html += allocCardHTML(dash);
+
   const nd = x.diffs.length;
   html += nd
     ? `<details class="card" data-key="__recon" ${prefs.closed.__recon ? '' : 'open'}><summary><span class="grow"><span class="flag">${nd} ${nd === 1 ? 'account differs' : 'accounts differ'}</span> from the Dashboard</span>${chev()}</summary>
@@ -729,10 +732,9 @@ function renderBalances() {
       <div class="bsnote" style="padding-bottom:12px">${netOff ? `<span class="flag">Dashboard shows ${esc(peso(sheetNet))}.</span> ` : 'Matches the Dashboard. '}Total assets less total liabilities${x.pend.length ? ', including entries queued on this phone' : ''}.</div></div>`;
 
   html += `<div class="sectiontitle">Memo</div><div class="card bs">
-    ${bsGroup({ key: 'allocs', label: 'Cash allocations', total: r2(bs.allocs.reduce((a, it) => a + it.value, 0)), items: bs.allocs.map(it => ({ name: clean(it.name), value: it.value, meta: 'from the Dashboard' })) })}
     ${bs.others.length ? bsGroup({ key: 'others', label: 'Other accounts in the log', total: r2(bs.others.reduce((a, it) => a + it.value, 0)), items: bs.others }) : ''}
     </div>
-    <p class="hint">Balances are computed on this phone from the log, in your Dashboard’s structure. Restricted cash and cash allocations come from the Dashboard. Tap an account or person to see their rows.</p>`;
+    <p class="hint">Balances are computed on this phone from the log, in your Dashboard’s structure. Restricted cash comes from the Dashboard; cash allocations are kept by this app and written to the Dashboard. Tap an account or person to see their rows.</p>`;
   el.innerHTML = html;
 }
 
@@ -763,8 +765,8 @@ function cascade(dash) {
   const ap = apAmount(dash);
   const liquid = r2(wallets + restricted + savings + sti);
   const nl = r2(liquid - restricted - ap - cards);
-  const allocs = allocItems(dash); const allocTotal = sum(allocs.map(it => it.value));
-  return { walletRows, wallets, restricted, savings, sti, cards, ap, liquid, nl, allocs, allocTotal, nca: r2(nl - allocTotal) };
+  const alloc = allocLines(dash).filter(a => a.on); const allocTotal = sum(alloc.map(a => a.amount));
+  return { walletRows, wallets, restricted, savings, sti, cards, ap, liquid, nl, allocs: alloc, allocTotal, nca: r2(nl - allocTotal) };
 }
 function cascadeRows(c, indent) {
   const kv = (l, v, sub) => `<div class="kv"><span${sub ? ' style="padding-left:12px"' : ''}>${l}</span><span class="num">${esc(peso(v))}</span></div>`;
@@ -776,7 +778,7 @@ function openNetCash() {
   const c = cascade(snap.dashboard);
   openSheet(`<h2>Net cash available</h2><p>Net liquidity less cash allocations. Accounts payable is already deducted in net liquidity, so allocations leave it out.</p>
     <div class="kv"><span>Net liquidity</span><span class="num">${esc(peso(c.nl))}</span></div>
-    ${c.allocs.map(it => `<div class="kv"><span style="padding-left:12px">Less ${esc(clean(it.name))}</span><span class="num">${esc(peso(-it.value))}</span></div>`).join('')}
+    ${c.allocs.map(a => `<div class="kv"><span style="padding-left:12px">Less ${esc(a.name)}</span><span class="num">${esc(peso(-a.amount))}</span></div>`).join('')}
     <div class="kv"><span><b>Net cash available</b></span><span class="num"><b>${esc(peso(c.nca))}</b></span></div>
     <div class="btns"><button class="secondary" id="sNL">Net liquidity breakdown</button><button class="secondary" id="closeS">Close</button></div>`);
   $('#sNL').onclick = openNetLiquidity;
@@ -788,6 +790,83 @@ function openNetLiquidity() {
     ${cascadeRows(c)}
     <div class="btns"><button class="secondary" id="closeS">Close</button></div>`);
   $('#closeS').onclick = closeSheet;
+}
+
+/* ---------- Cash allocations ----------
+   The app keeps one line per allocation; the sheet has ALLOC_SLOTS cells for them (Dashboard K21:L24, under the
+   Accounts Payable row). Allocations are spread evenly across the slots in order: names joined with ", " in the
+   name cell, amounts joined with "+" in the amount formula, an excluded amount written as (N*0). */
+const ALLOC_SLOTS = 4;
+let allocs = store.get(LS.allocs, { items: null, pending: false, supported: null });
+const saveAllocs = () => { store.set(LS.allocs, allocs); dirty(); };
+/** Split N items into ALLOC_SLOTS contiguous groups whose sizes differ by at most one, larger groups first. */
+function packAllocs(items) {
+  const base = Math.floor(items.length / ALLOC_SLOTS), extra = items.length % ALLOC_SLOTS; const out = []; let i = 0;
+  for (let k = 0; k < ALLOC_SLOTS; k++) { const n = base + (k < extra ? 1 : 0); out.push(items.slice(i, i + n).map(({ name, amount, on }) => ({ name, amount, on }))); i += n; }
+  return out;
+}
+/** Read one sheet slot back into allocation lines. */
+function parseAllocSlot(slot) {
+  const names = String(slot.name || '').split(',').map(clean).filter(Boolean);
+  if (!names.length) return [];
+  const f = String(slot.formula || '').replace(/\s/g, '');
+  if (f.startsWith('=')) {
+    const terms = f.slice(1).split('+').map(t => {
+      let m = /^\((\d+(?:\.\d+)?)\*0\)$|^\(?(\d+(?:\.\d+)?)\)?\*0$/.exec(t); if (m) return { amount: +(m[1] || m[2]), on: false };
+      m = /^\(?(\d+(?:\.\d+)?)\)?$/.exec(t); return m ? { amount: +m[1], on: true } : null;
+    });
+    if (terms.every(Boolean)) {
+      if (terms.length === names.length) return names.map((n, i) => ({ name: n, ...terms[i] }));
+      if (names.length === 1) return [{ name: names[0], amount: terms.reduce((a, t) => a + (t.on ? t.amount : 0), 0), on: true }];
+    }
+  } else if (names.length === 1) return [{ name: names[0], amount: Number(slot.value) || 0, on: true }];
+  return [{ name: names.join(' / '), amount: Number(slot.value) || 0, on: true }];   // unreadable: keep the cell's value as one line
+}
+const allocsFromSlots = slots => slots.flatMap(parseAllocSlot).map(a => ({ id: uid(), ...a }));
+/** Allocation lines in effect: the app's own list once read from the sheet, else the Dashboard's values. */
+function allocLines(dash) {
+  if (allocs.items) return allocs.items;
+  return allocItems(dash).map(it => ({ id: clean(it.name), name: clean(it.name), amount: it.value, on: true, legacy: true }));
+}
+async function syncAllocs() {
+  if (!cfg) return;
+  try {
+    const slots = allocs.pending && allocs.items ? await api('setAllocs', { slots: packAllocs(allocs.items) }) : await api('getAllocs');
+    allocs.items = allocsFromSlots(slots); allocs.pending = false; allocs.supported = true; saveAllocs();
+  } catch (e) {
+    if (!e.network && !e.auth) { allocs.supported = false; saveAllocs(); }   // the sheet's script doesn't know these actions yet
+    else throw e;
+  }
+}
+function editAlloc(id) {
+  const lines = allocLines(snap.dashboard); const a = lines.find(x => x.id === id) || { id: null, name: '', amount: '', on: true };
+  openSheet(`<h2>${a.id ? 'Edit allocation' : 'New allocation'}</h2>
+    <label class="label" for="aName">Name</label><input class="txt" id="aName" value="${esc(a.name)}" autocomplete="off" maxlength="60">
+    <label class="label" for="aAmt">Amount</label><input class="txt" id="aAmt" inputmode="numeric" value="${esc(a.amount === '' ? '' : String(a.amount))}" autocomplete="off">
+    <label class="brow" style="border:0"><input type="checkbox" id="aOn" ${a.on ? 'checked' : ''}><div class="grow"><div class="t">Include in Net cash</div><div class="s">Off keeps the amount but leaves it out of the total</div></div></label>
+    <div class="btns"><button class="primary" id="aSave">Save</button>${a.id ? '<button class="secondary" id="aDel" style="color:var(--neg)">Remove</button>' : ''}<button class="secondary" id="closeS">Cancel</button></div>`);
+  const commit = items => { allocs.items = items; allocs.pending = true; saveAllocs(); closeSheet(); renderAll(); if (navigator.onLine) syncAllocs().then(renderAll).catch(onError); };
+  $('#aSave').onclick = () => {
+    const name = clean($('#aName').value).replace(/\s+/g, ' '); const amount = Number(String($('#aAmt').value).replace(/[₱,\s]/g, ''));
+    if (!name) { toast('Add a name', 'err'); return; }
+    if (/[,+]/.test(name)) { toast('Names can’t contain a comma or a plus sign', 'err'); return; }
+    if (!Number.isInteger(amount) || amount < 0) { toast('Amount must be a whole number of pesos', 'err'); return; }
+    const items = lines.map(x => ({ id: x.id, name: x.name, amount: x.amount, on: x.on }));
+    if (a.id) Object.assign(items.find(x => x.id === a.id), { name, amount, on: $('#aOn').checked });
+    else items.push({ id: uid(), name, amount, on: $('#aOn').checked });
+    commit(items);
+  };
+  if (a.id) $('#aDel').onclick = () => { if (confirm(`Remove ${a.name}?`)) commit(lines.filter(x => x.id !== a.id).map(x => ({ id: x.id, name: x.name, amount: x.amount, on: x.on }))); };
+  $('#closeS').onclick = closeSheet;
+}
+function allocCardHTML(dash) {
+  const lines = allocLines(dash); const canEdit = allocs.supported === true && !!allocs.items;
+  const rowsHTML = lines.map(a => `<button class="row" ${canEdit ? `data-alloc="${esc(a.id)}"` : ''}><div class="grow"><div class="t" style="${a.on ? '' : 'color:var(--muted)'}">${esc(a.name)}</div>
+      ${a.on ? '' : '<div class="s">Not included</div>'}</div><div class="v ${a.on ? '' : 'tr'}" style="${a.on ? '' : 'color:var(--muted);font-weight:500'}">${esc(peso(a.amount))}</div></button>`).join('');
+  const note = allocs.pending ? `<span class="pending">Waiting to reach the sheet</span>` : allocs.supported === false ? `<span class="faint" style="font-size:12.5px">Editing needs the sheet script update. Showing the Dashboard’s values.</span>` : !canEdit ? `<span class="faint" style="font-size:12.5px">Sync once to edit</span>` : '';
+  return `<div class="sectiontitle">Cash allocations</div><div class="card">${rowsHTML || '<div class="row"><div class="grow muted">No allocations</div></div>'}
+    ${canEdit ? `<button class="row" data-alloc="__new" style="color:var(--accent);font-weight:600">+ Add allocation</button>` : ''}</div>
+    ${note ? `<p class="hint" style="margin-top:-4px">${note}</p>` : ''}`;
 }
 
 /* ---------- Reports ---------- */
@@ -1252,6 +1331,7 @@ $('#queueWrap').onclick = e => {
 
 $('#v-bal').addEventListener('click', e => {
   if (e.target.closest('summary')) return;
+  const al = e.target.closest('[data-alloc]'); if (al) { editAlloc(al.dataset.alloc === '__new' ? null : al.dataset.alloc); return; }
   if (e.target.closest('[data-nca]')) { openNetCash(); return; }
   if (e.target.closest('[data-nl]')) { openNetLiquidity(); return; }
   const a = e.target.closest('[data-acct]');
