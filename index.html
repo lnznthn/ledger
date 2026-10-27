@@ -289,7 +289,7 @@ details.card[open]>summary{border-bottom:1px solid var(--line)}
 
 <script>
 'use strict';
-const VERSION = '1.5.1';
+const VERSION = '1.5.2';
 const TYPES = ['Outflows', 'Inflow', 'Transfer'];
 const TYPE_LABEL = { Outflows: 'Outflow', Inflow: 'Inflow', Transfer: 'Transfer' };
 const LS = { cfg: 'ledger.cfg', rows: 'ledger.rows', blocks: 'ledger.blocks', snap: 'ledger.snap', queue: 'ledger.queue', prefs: 'ledger.prefs' };
@@ -779,6 +779,7 @@ function openNetLiquidity() {
   openSheet(`<h2>Net liquidity</h2><p>Wallets (excluding earmarked amounts) plus savings plus credit card balances, the same rule as your Dashboard.</p>
     ${Object.entries(nl.parts).map(([k, p]) => `<div class="kv"><span>${esc(k)}</span><span class="num">${esc(peso(p.live))}</span></div>`).join('')}
     <div class="kv"><span><b>Total</b></span><span class="num"><b>${esc(peso(nl.live))}</b></span></div>
+    <p style="margin-top:12px">Before earmarks this is ${esc(peso(liquidBridge(liquidSeries(1)[0].v).before))}, the basis of the Liquid balance line in Reports, which also bridges the two.</p>
     ${s ? `<p style="margin-top:12px">Dashboard shows ${esc(peso(s.value))}${s.pct ? ' (' + esc(s.pct) + ' of net assets)' : ''}.${nl.live !== nl.synced ? ' The figure above includes entries still queued on this phone.' : ''}</p>` : ''}
     <div class="btns"><button class="secondary" id="closeS">Close</button></div>`);
   $('#closeS').onclick = closeSheet;
@@ -823,6 +824,37 @@ function liquidSeries(days) {
   });
   const pts = []; for (let i = days - 1; i >= 0; i--) { const day = isoDay(-i); v += delta[day] || 0; pts.push({ day, v: r2(v) }); }
   return pts;
+}
+/** Bridge from the Liquid balance line (before earmarks, rows dated up to today) to Net liquidity on Balances.
+ *  Net liquidity = Σ wallets after earmarks (each floored to ₱0 at ₱1 or less) + Σ savings + Σ credit cards, over every row.
+ *  The two differ by: (1) earmarked portions of wallets, (2) wallets at ₱1 or less shown as ₱0, (3) rows dated after today. */
+function liquidBridge(lastV) {
+  const dash = snap.dashboard; const em = earmarkMap(dash); const nl = netLiquidity(dash, em);
+  const liq = new Set(); dash.groups.forEach(g => { if (/wallet|saving|credit/i.test(g.label)) g.items.forEach(it => liq.add(clean(it.name))); });
+  const today = isoDay(0); let future = 0;
+  rows.concat(derived().pend).forEach(r => {
+    if (!(r.date > today)) return; const a = Number(r.amount) || 0;
+    if (liq.has(clean(r.dest))) future += a; if (liq.has(clean(r.source))) future -= a;
+  });
+  const lines = []; let tiny = 0;
+  dash.groups.filter(g => /wallet/i.test(g.label)).forEach(g => g.items.forEach(it => {
+    const n = clean(it.name), raw = bal(n), e = em[n] || 0, after = raw - e > TOL ? raw - e : 0, drop = r2(raw - after);
+    if (Math.abs(drop) < 0.005) return;
+    if (e) lines.push([`Less earmarked in ${n}`, -drop, drop < e - 0.004 ? `earmark ${peso(e)} exceeds the ${peso(raw)} balance` : '']);
+    else tiny += drop;
+  }));
+  if (Math.abs(tiny) >= 0.005) lines.push(['Less wallets at ₱1 or less, shown as ₱0', -r2(tiny), '']);
+  if (Math.abs(future) >= 0.005) lines.unshift(['Add entries dated after today', r2(future), 'counted in balances, not yet on the chart']);
+  const other = r2(nl.live - lastV - lines.reduce((a, l) => a + l[1], 0));
+  if (Math.abs(other) >= 0.01) lines.push(['Unexplained difference', other, 'an account may sit in two Dashboard groups']);
+  return { lines, nl: nl.live, before: r2(nl.live - lines.filter(l => l[0].startsWith('Less')).reduce((a, l) => a + l[1], 0)) };
+}
+function liquidBridgeHTML(lastV) {
+  const b = liquidBridge(lastV);
+  return `<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px"><b style="font-size:14.5px">To Net liquidity</b>
+    <div class="kvs"><span>Liquid balance today</span><span class="num">${esc(peso(lastV))}</span></div>
+    ${b.lines.map(([k, v, note]) => `<div class="kvs sub"><span>${esc(k)}${note ? `<br><span class="faint" style="font-size:11.5px">${esc(note)}</span>` : ''}</span><span class="num">${esc(peso(v))}</span></div>`).join('')}
+    <div class="kvs"><span><b>Net liquidity</b> <span class="muted" style="font-size:12.5px">(Balances)</span></span><span class="num"><b>${esc(peso(b.nl))}</b></span></div></div>`;
 }
 function barSVG(months, get, sel) {
   const W = 340, H = 170, pb = 20, pt = 14, n = months.length, cw = W / n, bw = Math.min(13, cw * 0.3);
@@ -889,7 +921,8 @@ function renderReports() {
   html += `<div class="card pad"><b>Liquid balance</b>
     <div class="muted" style="font-size:13px;margin:2px 0 4px">Wallets + savings − credit cards, before earmarks. ${esc(peso(lastV - first, { plus: true, round: true }))} over ${n} months.</div>
     <div id="lnRead" class="num" style="font-weight:650;font-size:20px;margin:6px 0">${esc(peso(lastV))} <span class="muted" style="font-size:13px;font-weight:500">today</span></div>
-    ${lineSVG(pts)}<div class="faint" style="font-size:12px;margin-top:6px">Drag across the chart to read any day.</div></div>`;
+    ${lineSVG(pts)}<div class="faint" style="font-size:12px;margin-top:6px">Drag across the chart to read any day.</div>
+    ${liquidBridgeHTML(lastV)}</div>`;
 
   // 3. Spending by category, monthly averages over complete months
   const av = rd.avg[n]; const cur = rd.get(x_ym()).cats;
