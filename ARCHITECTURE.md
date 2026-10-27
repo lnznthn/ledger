@@ -80,35 +80,40 @@ Consequences worth remembering:
 
 ### Reconciliation against the Dashboard
 
-For every name in a Dashboard group (excluding Allocated and Receivables, which the app cannot derive), the app sums that name's Dashboard cells across groups and compares with its own synced balance. Differences over ₱1 show as an amber "accounts differ" card on Balances. A name appearing in both Wallets and Restricted Cash (an earmarked wallet) is summed across both, which gives back its full balance.
+For every name in a Dashboard group (excluding Allocated and Receivables, which the app cannot derive), the app sums that name's Dashboard cells across groups and compares with its own synced balance. Differences over ₱1 show as an amber "accounts differ" card on Balances. A name appearing in both Wallets and Restricted Cash (an account with a maintaining balance) is summed across both, which gives back its full balance.
 
-### Earmarks
+### Maintaining balances (earmarks)
 
-The Dashboard's **Restricted Cash** group lists amounts held inside wallet accounts for a purpose. Its cells are formulas on the Transactions log, typically "the account's balance, capped at a set amount". The matching Wallets cell shows the balance minus that restricted amount. The app reads the restricted amounts from the Dashboard (`earmarkMap`); it does not know the caps, so between syncs the earmark stays at its last-synced value even if a queued entry changes the wallet's balance.
+The Dashboard's **Restricted Cash** group lists maintaining balances held inside bank accounts. There are two kinds:
 
-A Restricted Cash item that is not also in Wallets (an account held only as restricted cash) is excluded from Net liquidity and from the Liquid balance line; it appears only in the balance sheet under Restricted cash.
+- **Active account with a cap.** The restricted cell is the account's balance capped at a fixed amount (the cap is written into the Dashboard formula). Only the excess over the cap counts as a wallet balance.
+- **Unused account.** The restricted cell is the account's whole balance, uncapped, because nothing in it is meant to be spent. Such an account may or may not also be listed in Wallets; either way it contributes nothing to Net liquidity.
 
-### Headline figures
+The app reads the restricted amounts from the Dashboard (`earmarkMap`) and never hardcodes a cap. Between syncs an earmark stays at its last-synced value even if a queued entry changes that account's balance.
 
-| Figure | Where | Rule |
-| --- | --- | --- |
-| **Net liquidity** | Balances, Net liquidity tile | Σ Wallets after earmarks, each wallet floored to ₱0 if ₱1 or less after its earmark, + Σ Savings + Σ Credit cards. Uses live balances over all rows. Matches Dashboard `D4` (`=SUM(H3,H13)+J25`); flagged amber if the synced value differs by more than ₱1. |
-| **Net cash available** | Balances headline | Net liquidity − total of the Dashboard's Allocated Cash group. Allocations come from the Dashboard only. Matches the Dashboard's Net Cash Available cell. |
-| **Net assets** | Balances | Total assets − total liabilities from the pro forma balance sheet below. |
-| **Liquid balance** | Reports, trend line | Σ Wallets + Σ Savings + Σ Credit cards **before earmarks and with no ₱1 floor**, accumulated day by day from rows dated up to today. |
+### The liquidity cascade
 
-Liquid balance and Net liquidity intentionally measure different things. The Reports card shows a bridge from one to the other (`liquidBridge`):
+These definitions are the owner's and must not drift. `cascade(dash)` computes all of them for Balances; `netLiqSeries` applies the same rule day by day for Reports.
 
-1. Add rows dated after today (in balances, not on the chart).
-2. Less each wallet's earmarked portion (the full earmark, or the whole balance if the earmark exceeds it).
-3. Less wallets at ₱1 or less, which Net liquidity shows as ₱0.
-4. Any remainder is shown as "Unexplained difference" and means the rules have drifted apart, most likely an account listed in two of the Wallets, Savings and Credit cards groups (Net liquidity would count it twice, the trend line once).
+| Figure | Rule |
+| --- | --- |
+| Wallets, net | Each Wallets account's balance less its maintaining balance; a result of ₱1 or less (including negatives) shows as ₱0. |
+| **Liquid assets** | Wallets, net + Restricted cash + Savings + Short-term investments. Long-term investments, receivables and ventures are not liquid. |
+| **Net liquidity** | Liquid assets − Restricted cash − Accounts payable − Credit cards owed. |
+| **Net cash available** | Net liquidity − cash allocations. Allocations are the Dashboard's Allocated Cash lines **excluding Accounts Payable**, which is already deducted in Net liquidity. This is the Balances headline. |
+| **Net assets** | Total assets − total liabilities from the balance sheet below. |
 
-The Net liquidity breakdown sheet on Balances also shows the before-earmarks figure.
+Sources: Restricted cash and the allocation amounts come from the Dashboard. Accounts payable is the log's `Accounts Payable` account, which is credit-normal (money owed makes its Destination − Source balance negative); the app negates it, and falls back to the Dashboard line only if the log never touches the account. Everything else is the app's own log math.
+
+The Dashboard's own Net Liquidity and Net Cash Available cells still use an older definition (no short-term investments, AP inside allocations), so the app no longer compares against them. Per-account reconciliation still runs.
+
+### Net liquidity trend (Reports)
+
+`netLiqSeries(days)` rebuilds Net liquidity for each day from rows dated up to today. For history it needs the maintaining-balance rule per day: a wallet whose earmark equals its whole balance today is treated as an unused account and fully restricted on every day; any other earmark is treated as a cap, so the wallet contributes `walletNet(raw, min(raw, cap))`. Accounts payable, savings, short-term investments and credit cards are summed directly. The card under the chart shows today's cascade and notes any entries dated after today (counted in Balances, left off the line), which are the only reason the line's last point can differ from the Balances figure.
 
 ### Balance sheet (Balances tab)
 
-Assets: Wallets (after earmarks), Savings, Restricted cash (Dashboard values), Short-term investments, Long-term investments, Receivables, Ventures. Liabilities: Credit cards (shown as positive amounts owed), Accounts payable (taken from the Allocated Cash group's "Accounts Payable" line). Every line except Restricted cash and Accounts payable is valued from the log. A memo section lists the Allocated Cash lines and any account in the log that is on no Dashboard group.
+Assets: Wallets (after earmarks), Savings, Restricted cash (Dashboard values), Short-term investments, Long-term investments, Receivables, Ventures. Liabilities: Credit cards (shown as positive amounts owed), Accounts payable (from the log). Every line except Restricted cash is valued from the log. A memo section lists the cash allocations (excluding Accounts Payable) and any account in the log that is on no Dashboard group.
 
 ### Receivables
 
@@ -117,6 +122,7 @@ Per-person receivables are tracked by **description**: for rows whose Source or 
 ### Reports
 
 - **Cash flow**: monthly inflows and spending. Inflows exclude `Set-up` (opening balances), `Lending Receivables` and `Allowance for Bad Debts` (`INFLOW_EXCLUDE`). Spending is Outflows into non-accounts.
+- **Net liquidity**: daily trend line, described above.
 - **Spending by category**: monthly averages over the last 3, 6 or 12 complete months.
 - **Inflows by source**: totals over the selected window, including the current month.
 - **Asset mix**: straight from the Dashboard summary rows marked as sub-items.
@@ -140,3 +146,4 @@ Per-person receivables are tracked by **description**: for rows whose Source or 
 | 1.5.0 | Balances as a pro forma balance sheet; Reports tab replaces Owed |
 | 1.5.1 | Tab order: Reports first, Add last |
 | 1.5.2 | Liquid balance → Net liquidity bridge on Reports; `sw.js` restored; this document |
+| 1.6.0 | Liquidity cascade redefined (short-term investments liquid, AP out of allocations); Reports trend line is Net liquidity; Dashboard summary-cell comparison dropped |

@@ -289,7 +289,7 @@ details.card[open]>summary{border-bottom:1px solid var(--line)}
 
 <script>
 'use strict';
-const VERSION = '1.5.2';
+const VERSION = '1.6.0';
 const TYPES = ['Outflows', 'Inflow', 'Transfer'];
 const TYPE_LABEL = { Outflows: 'Outflow', Inflow: 'Inflow', Transfer: 'Transfer' };
 const LS = { cfg: 'ledger.cfg', rows: 'ledger.rows', blocks: 'ledger.blocks', snap: 'ledger.snap', queue: 'ledger.queue', prefs: 'ledger.prefs' };
@@ -654,8 +654,7 @@ function balanceSheet(dash) {
   const onDash = new Set(recv.map(r => r.name));
   const recvExtra = Object.entries(x.recv).filter(([n, v]) => v >= TOL && !onDash.has(n)).sort((a, b) => b[1] - a[1]).map(([n, v]) => ({ name: n, value: r2(v), who: true }));
   const cards = items(/credit/i).map(it => line(it, -bal(it.name), bal(it.name) > 0.004 ? 'credit balance' : ''));
-  const apIt = items(/allocated/i).find(it => /accounts payable/i.test(it.name));
-  const ap = apIt ? [{ name: 'Accounts Payable', value: apIt.value, meta: 'from the Dashboard' }] : [];
+  const ap = [{ name: 'Accounts Payable', value: apAmount(dash), acct: x.accounts.has(AP_NAME) }];
   const total = arr => r2(arr.reduce((s, i) => s + (i.total != null ? i.total : i.value), 0));
   const mk = (key, label, list, extra) => ({ key, label, items: list, extra, total: total(list) });
   const assets = [mk('wallets', 'Wallets', wallets), mk('savings', 'Savings', plain(/saving/i)), mk('restricted', 'Restricted cash', restricted),
@@ -666,7 +665,7 @@ function balanceSheet(dash) {
   const others = [...x.accounts].filter(a => !placed.has(a) && !RECEIVABLE_ACCTS.includes(a) && a !== 'Accounts Payable' && Math.abs(bal(a)) >= 0.5)
     .sort().map(n => ({ name: n, value: bal(n), acct: true }));
   const ta = total(assets), tl = total(liabilities);
-  return { assets, liabilities, ta, tl, net: r2(ta - tl), others, allocs: items(/allocated/i) };
+  return { assets, liabilities, ta, tl, net: r2(ta - tl), others, allocs: allocItems(dash) };
 }
 function bsRow(it) {
   const x = derived(); const diff = it.acct && x.diffs.find(d => d.name === it.name);
@@ -692,28 +691,22 @@ function renderBalances() {
   const x = derived();
   const sum = Object.fromEntries((dash.summary || []).map(s => [s.label, s]));
   const pendNet = x.pend.reduce((a, e) => a + (e.type === 'Inflow' ? +e.amount : e.type === 'Outflows' ? -e.amount : 0), 0);
-  const earmarks = earmarkMap(dash);
-  const nl = netLiquidity(dash, earmarks);
-  const sheetNL = sum['Net Liquidity'];
-  const nlOff = sheetNL && sheetNL.value != null && Math.abs(nl.synced - sheetNL.value) > TOL;
+  const c = cascade(dash);
   const bs = balanceSheet(dash);
   const sheetNet = sum['Net Assets'] && sum['Net Assets'].value;
   const netOff = sheetNet != null && Math.abs(bs.net - pendNet - sheetNet) > TOL;
-  const alloc = dash.groups.find(g => /allocated/i.test(g.label));
-  const allocTotal = alloc ? (alloc.total != null ? alloc.total : alloc.items.reduce((a, it) => a + it.value, 0)) : 0;
-  const nca = r2(nl.live - allocTotal);
   const cardsOwed = (bs.liabilities.find(g => g.key === 'cards') || { total: 0 }).total;
   const monthName = parseISO(x.ym + '-01').toLocaleDateString('en-US', { month: 'long' });
 
   let html = `<div class="card hero">
     <button data-nca="1" style="text-align:left;display:block;width:100%">
       <div class="label">Net cash available${x.pend.length ? ' · incl. queued' : ''}</div>
-      <div class="big ${nca < 0 ? 'neg' : ''}" style="margin-bottom:2px">${esc(peso(nca))}</div>
-      <div class="muted" style="font-size:13px;margin-bottom:14px">Net liquidity ${esc(peso(nl.live, { round: true }))} less allocated ${esc(peso(allocTotal, { round: true }))}</div>
+      <div class="big ${c.nca < 0 ? 'neg' : ''}" style="margin-bottom:2px">${esc(peso(c.nca))}</div>
+      <div class="muted" style="font-size:13px;margin-bottom:14px">Net liquidity ${esc(peso(c.nl, { round: true }))} less allocations ${esc(peso(c.allocTotal, { round: true }))}</div>
     </button>
     <div class="stats">
-      <button data-nl="1" style="text-align:left"><div class="label">Net liquidity</div><div class="v ${nl.live < 0 ? 'neg' : ''}">${esc(peso(nl.live, { round: true }))}</div>
-        <div class="s muted" style="font-size:12.5px">${bs.net ? esc((nl.live / bs.net * 100).toFixed(1)) + '% of net assets' : ''}${nlOff ? ` · <span class="flag">Dashboard ${esc(peso(sheetNL.value, { round: true }))}</span>` : ''}</div></button>
+      <button data-nl="1" style="text-align:left"><div class="label">Net liquidity</div><div class="v ${c.nl < 0 ? 'neg' : ''}">${esc(peso(c.nl, { round: true }))}</div>
+        <div class="s muted" style="font-size:12.5px">${bs.net ? esc((c.nl / bs.net * 100).toFixed(1)) + '% of net assets' : ''}</div></button>
       <div><div class="label">${esc(monthName)} spending</div><div class="v">${esc(peso(x.monthTotal, { round: true }))}</div></div>
       <div><div class="label">Credit cards owed</div><div class="v">${esc(peso(cardsOwed, { round: true }))}</div></div>
       <div><div class="label">Net assets</div><div class="v">${esc(peso(bs.net, { round: true }))}</div></div>
@@ -736,51 +729,63 @@ function renderBalances() {
       <div class="bsnote" style="padding-bottom:12px">${netOff ? `<span class="flag">Dashboard shows ${esc(peso(sheetNet))}.</span> ` : 'Matches the Dashboard. '}Total assets less total liabilities${x.pend.length ? ', including entries queued on this phone' : ''}.</div></div>`;
 
   html += `<div class="sectiontitle">Memo</div><div class="card bs">
-    ${bsGroup({ key: 'allocs', label: 'Allocated cash', total: r2(bs.allocs.reduce((a, it) => a + it.value, 0)), items: bs.allocs.map(it => ({ name: clean(it.name), value: it.value, meta: 'from the Dashboard' })) })}
+    ${bsGroup({ key: 'allocs', label: 'Cash allocations', total: r2(bs.allocs.reduce((a, it) => a + it.value, 0)), items: bs.allocs.map(it => ({ name: clean(it.name), value: it.value, meta: 'from the Dashboard' })) })}
     ${bs.others.length ? bsGroup({ key: 'others', label: 'Other accounts in the log', total: r2(bs.others.reduce((a, it) => a + it.value, 0)), items: bs.others }) : ''}
     </div>
-    <p class="hint">Balances are computed on this phone from the log, in your Dashboard’s structure. Accounts payable, restricted and allocated amounts come from the Dashboard. Tap an account or person to see their rows.</p>`;
+    <p class="hint">Balances are computed on this phone from the log, in your Dashboard’s structure. Restricted cash and cash allocations come from the Dashboard. Tap an account or person to see their rows.</p>`;
   el.innerHTML = html;
 }
 
-function netLiquidity(dash, earmarks) {
-  const parts = { Wallets: { live: 0, synced: 0 }, Savings: { live: 0, synced: 0 }, 'Credit cards': { live: 0, synced: 0 } };
-  const syn = name => r2(derived().synced[clean(name)] || 0);
-  (dash.groups || []).forEach(g => {
-    const key = /wallet/i.test(g.label) ? 'Wallets' : /saving/i.test(g.label) ? 'Savings' : /credit/i.test(g.label) ? 'Credit cards' : null;
-    if (!key) return;
-    g.items.forEach(it => {
-      const n = clean(it.name), e = key === 'Wallets' ? (earmarks[n] || 0) : 0;
-      const f = v => key === 'Wallets' ? (v - e > TOL ? v - e : 0) : v;
-      parts[key].live += f(bal(n)); parts[key].synced += f(syn(n));
-    });
-  });
-  const live = Object.values(parts).reduce((a, p) => a + p.live, 0), synced = Object.values(parts).reduce((a, p) => a + p.synced, 0);
-  return { live: r2(live), synced: r2(synced), parts };
+/* ---------- Liquidity cascade ----------
+   Liquid assets = wallets net of maintaining balances + restricted cash + savings + short-term investments
+   Net liquidity  = liquid assets − restricted cash − accounts payable − credit cards owed
+   Net cash       = net liquidity − cash allocations (Allocated Cash block, excluding Accounts Payable) */
+const AP_NAME = 'Accounts Payable';
+const IS_AP = /accounts payable/i;
+const groupItems = (dash, re) => (dash.groups || []).filter(g => re.test(g.label)).flatMap(g => g.items);
+/** Wallet value after its maintaining balance, the Dashboard's rule: excess over the earmark, ₱1 or less shown as ₱0. */
+const walletNet = (raw, e) => (raw - e > TOL ? raw - e : 0);
+/** Accounts payable from the log (a credit-normal account); falls back to the Dashboard if the log never touches it. */
+function apAmount(dash, src) {
+  const v = (src || derived().live)[AP_NAME];
+  if (v !== undefined) return r2(-v);
+  const it = groupItems(dash, /allocated/i).find(x => IS_AP.test(x.name)); return it ? it.value : 0;
+}
+const allocItems = dash => groupItems(dash, /allocated/i).filter(it => !IS_AP.test(it.name));
+function cascade(dash) {
+  const em = earmarkMap(dash); const sum = xs => r2(xs.reduce((a, b) => a + b, 0));
+  const walletRows = groupItems(dash, /wallet/i).map(it => { const n = clean(it.name), raw = bal(n), e = em[n] || 0; return { name: n, raw, e, net: walletNet(raw, e) }; });
+  const wallets = sum(walletRows.map(w => w.net));
+  const restricted = sum(groupItems(dash, EARMARK).map(it => it.value));
+  const savings = sum(groupItems(dash, /saving/i).map(it => bal(it.name)));
+  const sti = sum(groupItems(dash, /short term/i).map(it => bal(it.name)));
+  const cards = sum(groupItems(dash, /credit/i).map(it => -bal(it.name)));   // amount owed, positive
+  const ap = apAmount(dash);
+  const liquid = r2(wallets + restricted + savings + sti);
+  const nl = r2(liquid - restricted - ap - cards);
+  const allocs = allocItems(dash); const allocTotal = sum(allocs.map(it => it.value));
+  return { walletRows, wallets, restricted, savings, sti, cards, ap, liquid, nl, allocs, allocTotal, nca: r2(nl - allocTotal) };
+}
+function cascadeRows(c, indent) {
+  const kv = (l, v, sub) => `<div class="kv"><span${sub ? ' style="padding-left:12px"' : ''}>${l}</span><span class="num">${esc(peso(v))}</span></div>`;
+  return kv('Wallets, net of maintaining balances', c.wallets, 1) + kv('Restricted cash', c.restricted, 1) + kv('Savings', c.savings, 1) + kv('Short-term investments', c.sti, 1)
+    + kv('<b>Liquid assets</b>', c.liquid) + kv('Less restricted cash', -c.restricted, 1) + kv('Less accounts payable', -c.ap, 1) + kv('Less credit cards owed', -c.cards, 1)
+    + kv('<b>Net liquidity</b>', c.nl);
 }
 function openNetCash() {
-  const dash = snap.dashboard; const earmarks = {};
-  dash.groups.filter(g => EARMARK.test(g.label)).forEach(g => g.items.forEach(it => earmarks[clean(it.name)] = it.value));
-  const nl = netLiquidity(dash, earmarks);
-  const alloc = dash.groups.find(g => /allocated/i.test(g.label)) || { items: [], total: 0 };
-  const allocTotal = alloc.total != null ? alloc.total : alloc.items.reduce((a, it) => a + it.value, 0);
-  openSheet(`<h2>Net cash available</h2><p>Net liquidity minus cash you’ve allocated, the same rule as your Dashboard. Allocations come from the Dashboard’s Allocated Cash block.</p>
-    <div class="kv"><span>Net liquidity</span><span class="num">${esc(peso(nl.live))}</span></div>
-    ${alloc.items.map(it => `<div class="kv"><span style="padding-left:12px">Less ${esc(it.name)}</span><span class="num">${esc(peso(-it.value))}</span></div>`).join('')}
-    <div class="kv"><span><b>Net cash available</b></span><span class="num"><b>${esc(peso(r2(nl.live - allocTotal)))}</b></span></div>
+  const c = cascade(snap.dashboard);
+  openSheet(`<h2>Net cash available</h2><p>Net liquidity less cash allocations. Accounts payable is already deducted in net liquidity, so allocations leave it out.</p>
+    <div class="kv"><span>Net liquidity</span><span class="num">${esc(peso(c.nl))}</span></div>
+    ${c.allocs.map(it => `<div class="kv"><span style="padding-left:12px">Less ${esc(clean(it.name))}</span><span class="num">${esc(peso(-it.value))}</span></div>`).join('')}
+    <div class="kv"><span><b>Net cash available</b></span><span class="num"><b>${esc(peso(c.nca))}</b></span></div>
     <div class="btns"><button class="secondary" id="sNL">Net liquidity breakdown</button><button class="secondary" id="closeS">Close</button></div>`);
   $('#sNL').onclick = openNetLiquidity;
   $('#closeS').onclick = closeSheet;
 }
 function openNetLiquidity() {
-  const dash = snap.dashboard; const earmarks = {};
-  dash.groups.filter(g => EARMARK.test(g.label)).forEach(g => g.items.forEach(it => earmarks[clean(it.name)] = it.value));
-  const nl = netLiquidity(dash, earmarks); const s = (dash.summary || []).find(x => x.label === 'Net Liquidity');
-  openSheet(`<h2>Net liquidity</h2><p>Wallets (excluding earmarked amounts) plus savings plus credit card balances, the same rule as your Dashboard.</p>
-    ${Object.entries(nl.parts).map(([k, p]) => `<div class="kv"><span>${esc(k)}</span><span class="num">${esc(peso(p.live))}</span></div>`).join('')}
-    <div class="kv"><span><b>Total</b></span><span class="num"><b>${esc(peso(nl.live))}</b></span></div>
-    <p style="margin-top:12px">Before earmarks this is ${esc(peso(liquidBridge(liquidSeries(1)[0].v).before))}, the basis of the Liquid balance line in Reports, which also bridges the two.</p>
-    ${s ? `<p style="margin-top:12px">Dashboard shows ${esc(peso(s.value))}${s.pct ? ' (' + esc(s.pct) + ' of net assets)' : ''}.${nl.live !== nl.synced ? ' The figure above includes entries still queued on this phone.' : ''}</p>` : ''}
+  const c = cascade(snap.dashboard);
+  openSheet(`<h2>Net liquidity</h2><p>Liquid assets less restricted cash, accounts payable and credit cards owed. Restricted cash is the maintaining balances, from the Dashboard; everything else comes from the log.</p>
+    ${cascadeRows(c)}
     <div class="btns"><button class="secondary" id="closeS">Close</button></div>`);
   $('#closeS').onclick = closeSheet;
 }
@@ -813,48 +818,44 @@ function reportData() {
   R = { D: x, get, avg: { 3: avg(3), 6: avg(6), 12: avg(12) } };
   return R;
 }
-function liquidSeries(days) {
-  const liq = new Set(); snap.dashboard.groups.forEach(g => { if (/wallet|saving|credit/i.test(g.label)) g.items.forEach(it => liq.add(clean(it.name))); });
-  const start = isoDay(-(days - 1)), today = isoDay(0); const delta = {}; let v = 0;
+/** Daily Net liquidity from the log, same cascade as Balances (rows dated after today are left off the line).
+ *  Maintaining balances: a wallet whose earmark equals its whole balance today is an unused account, so it is
+ *  fully restricted on every day; otherwise the earmark is a cap, and only the excess over it counts. */
+function netLiqSeries(days) {
+  const dash = snap.dashboard; const em = earmarkMap(dash);
+  const walletModes = {};
+  groupItems(dash, /wallet/i).forEach(it => { const n = clean(it.name), e = em[n] || 0; walletModes[n] = !e ? 0 : Math.abs(bal(n) - e) <= TOL ? 'full' : e; });
+  const linear = {};  // sign applied to each non-wallet account's balance
+  groupItems(dash, /saving/i).concat(groupItems(dash, /short term/i), groupItems(dash, /credit/i)).forEach(it => linear[clean(it.name)] = 1);
+  linear[AP_NAME] = 1;    // credit-normal: its log balance is already negative when money is owed
+  const track = new Set(Object.keys(walletModes).concat(Object.keys(linear)));
+  const start = isoDay(-(days - 1)), today = isoDay(0); const run = {}; const delta = {};
+  const add = (o, k, v) => o[k] = (o[k] || 0) + v;
   rows.concat(derived().pend).forEach(r => {
-    const a = Number(r.amount) || 0; let d = 0;
-    if (liq.has(clean(r.dest))) d += a; if (liq.has(clean(r.source))) d -= a;
-    if (!d || r.date > today) return;
-    if (r.date < start) v += d; else delta[r.date] = (delta[r.date] || 0) + d;
+    const a = Number(r.amount) || 0, d = clean(r.dest), sc = clean(r.source);
+    if (r.date > today || (!track.has(d) && !track.has(sc))) return;
+    const tgt = r.date < start ? run : (delta[r.date] = delta[r.date] || {});
+    if (track.has(d)) add(tgt, d, a); if (track.has(sc)) add(tgt, sc, -a);
   });
-  const pts = []; for (let i = days - 1; i >= 0; i--) { const day = isoDay(-i); v += delta[day] || 0; pts.push({ day, v: r2(v) }); }
+  const value = () => {
+    let v = 0;
+    for (const n in walletModes) { const raw = run[n] || 0, m = walletModes[n]; v += m === 'full' ? 0 : walletNet(raw, m ? Math.min(raw, m) : 0); }
+    for (const n in linear) v += run[n] || 0;
+    return r2(v);
+  };
+  const pts = [];
+  for (let k = days - 1; k >= 0; k--) { const day = isoDay(-k); const dd = delta[day]; if (dd) for (const n in dd) add(run, n, dd[n]); pts.push({ day, v: value() }); }
   return pts;
 }
-/** Bridge from the Liquid balance line (before earmarks, rows dated up to today) to Net liquidity on Balances.
- *  Net liquidity = Σ wallets after earmarks (each floored to ₱0 at ₱1 or less) + Σ savings + Σ credit cards, over every row.
- *  The two differ by: (1) earmarked portions of wallets, (2) wallets at ₱1 or less shown as ₱0, (3) rows dated after today. */
-function liquidBridge(lastV) {
-  const dash = snap.dashboard; const em = earmarkMap(dash); const nl = netLiquidity(dash, em);
-  const liq = new Set(); dash.groups.forEach(g => { if (/wallet|saving|credit/i.test(g.label)) g.items.forEach(it => liq.add(clean(it.name))); });
-  const today = isoDay(0); let future = 0;
-  rows.concat(derived().pend).forEach(r => {
-    if (!(r.date > today)) return; const a = Number(r.amount) || 0;
-    if (liq.has(clean(r.dest))) future += a; if (liq.has(clean(r.source))) future -= a;
-  });
-  const lines = []; let tiny = 0;
-  dash.groups.filter(g => /wallet/i.test(g.label)).forEach(g => g.items.forEach(it => {
-    const n = clean(it.name), raw = bal(n), e = em[n] || 0, after = raw - e > TOL ? raw - e : 0, drop = r2(raw - after);
-    if (Math.abs(drop) < 0.005) return;
-    if (e) lines.push([`Less earmarked in ${n}`, -drop, drop < e - 0.004 ? `earmark ${peso(e)} exceeds the ${peso(raw)} balance` : '']);
-    else tiny += drop;
-  }));
-  if (Math.abs(tiny) >= 0.005) lines.push(['Less wallets at ₱1 or less, shown as ₱0', -r2(tiny), '']);
-  if (Math.abs(future) >= 0.005) lines.unshift(['Add entries dated after today', r2(future), 'counted in balances, not yet on the chart']);
-  const other = r2(nl.live - lastV - lines.reduce((a, l) => a + l[1], 0));
-  if (Math.abs(other) >= 0.01) lines.push(['Unexplained difference', other, 'an account may sit in two Dashboard groups']);
-  return { lines, nl: nl.live, before: r2(nl.live - lines.filter(l => l[0].startsWith('Less')).reduce((a, l) => a + l[1], 0)) };
-}
-function liquidBridgeHTML(lastV) {
-  const b = liquidBridge(lastV);
-  return `<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px"><b style="font-size:14.5px">To Net liquidity</b>
-    <div class="kvs"><span>Liquid balance today</span><span class="num">${esc(peso(lastV))}</span></div>
-    ${b.lines.map(([k, v, note]) => `<div class="kvs sub"><span>${esc(k)}${note ? `<br><span class="faint" style="font-size:11.5px">${esc(note)}</span>` : ''}</span><span class="num">${esc(peso(v))}</span></div>`).join('')}
-    <div class="kvs"><span><b>Net liquidity</b> <span class="muted" style="font-size:12.5px">(Balances)</span></span><span class="num"><b>${esc(peso(b.nl))}</b></span></div></div>`;
+function netLiqTodayHTML(lastV) {
+  const c = cascade(snap.dashboard); const future = r2(c.nl - lastV);
+  return `<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px"><b style="font-size:14.5px">Today</b>
+    <div class="kvs"><span>Liquid assets</span><span class="num">${esc(peso(c.liquid))}</span></div>
+    <div class="kvs sub"><span>Less restricted cash</span><span class="num">${esc(peso(-c.restricted))}</span></div>
+    <div class="kvs sub"><span>Less accounts payable</span><span class="num">${esc(peso(-c.ap))}</span></div>
+    <div class="kvs sub"><span>Less credit cards owed</span><span class="num">${esc(peso(-c.cards))}</span></div>
+    <div class="kvs"><span><b>Net liquidity</b> <span class="muted" style="font-size:12.5px">(Balances)</span></span><span class="num"><b>${esc(peso(c.nl))}</b></span></div>
+    ${Math.abs(future) >= 0.005 ? `<div class="faint" style="font-size:12px;margin-top:4px">Includes ${esc(peso(future, { plus: true }))} from entries dated after today, which the line leaves off.</div>` : ''}</div>`;
 }
 function barSVG(months, get, sel) {
   const W = 340, H = 170, pb = 20, pt = 14, n = months.length, cw = W / n, bw = Math.min(13, cw * 0.3);
@@ -915,14 +916,14 @@ function renderReports() {
       ${top(f.cats, 4).map(([k, v]) => `<div class="kvs sub"><span>${esc(k)}</span><span class="num">${esc(peso(-v))}</span></div>`).join('')}
       <div class="faint" style="font-size:12px;margin-top:6px">Tap a month to see it. Inflows exclude opening balances and loan principal collected.</div></div></div>`;
 
-  // 2. Liquid balance trend
-  const days = n === 3 ? 92 : n === 6 ? 183 : 365; const pts = liquidSeries(days); state.lnPts = pts;
+  // 2. Net liquidity trend
+  const days = n === 3 ? 92 : n === 6 ? 183 : 365; const pts = netLiqSeries(days); state.lnPts = pts;
   const first = pts[0].v, lastV = pts[pts.length - 1].v;
-  html += `<div class="card pad"><b>Liquid balance</b>
-    <div class="muted" style="font-size:13px;margin:2px 0 4px">Wallets + savings − credit cards, before earmarks. ${esc(peso(lastV - first, { plus: true, round: true }))} over ${n} months.</div>
+  html += `<div class="card pad"><b>Net liquidity</b>
+    <div class="muted" style="font-size:13px;margin:2px 0 4px">Liquid assets less restricted cash, accounts payable and credit cards. ${esc(peso(lastV - first, { plus: true, round: true }))} over ${n} months.</div>
     <div id="lnRead" class="num" style="font-weight:650;font-size:20px;margin:6px 0">${esc(peso(lastV))} <span class="muted" style="font-size:13px;font-weight:500">today</span></div>
     ${lineSVG(pts)}<div class="faint" style="font-size:12px;margin-top:6px">Drag across the chart to read any day.</div>
-    ${liquidBridgeHTML(lastV)}</div>`;
+    ${netLiqTodayHTML(lastV)}</div>`;
 
   // 3. Spending by category, monthly averages over complete months
   const av = rd.avg[n]; const cur = rd.get(x_ym()).cats;
