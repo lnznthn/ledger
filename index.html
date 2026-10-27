@@ -289,7 +289,7 @@ details.card[open]>summary{border-bottom:1px solid var(--line)}
 
 <script>
 'use strict';
-const VERSION = '1.7.1';
+const VERSION = '1.7.2';
 const TYPES = ['Outflows', 'Inflow', 'Transfer'];
 const TYPE_LABEL = { Outflows: 'Outflow', Inflow: 'Inflow', Transfer: 'Transfer' };
 const LS = { cfg: 'ledger.cfg', rows: 'ledger.rows', blocks: 'ledger.blocks', snap: 'ledger.snap', queue: 'ledger.queue', prefs: 'ledger.prefs', allocs: 'ledger.allocs' };
@@ -870,7 +870,8 @@ function allocCardHTML(dash) {
 }
 
 /* ---------- Reports ---------- */
-const INFLOW_EXCLUDE = new Set(['Set-up', 'Lending Receivables', 'Allowance for Bad Debts']); // opening balances and loan principal aren't income
+const BAD_DEBTS = 'Allowance for Bad Debts';
+const INFLOW_EXCLUDE = new Set(['Set-up', 'Lending Receivables', BAD_DEBTS]); // opening balances and loan principal aren't income
 const fmtK = n => { const a = Math.abs(n); const b = a >= 1e6 ? (a / 1e6).toFixed(a >= 1e7 ? 0 : 1) + 'M' : a >= 1e3 ? (a / 1e3).toFixed(a >= 1e4 ? 0 : 1) + 'k' : a.toFixed(0); return n < -0.004 ? `(₱${b})` : `₱${b}`; };
 function monthKeys(n, skipCurrent) {
   const out = []; const now = new Date();
@@ -884,12 +885,21 @@ const monLabel = (ym, long) => new Date(+ym.slice(0, 4), +ym.slice(5) - 1, 1).to
 let R = null;
 function reportData() {
   if (R && R.D === derived()) return R;
-  const x = derived(); const flow = {};
-  rows.concat(x.pend).forEach(r => {
+  const x = derived(); const flow = {}; const all = rows.concat(x.pend);
+  // Accrued interest on a loan fully provided for is booked as Lending Income into Lending Receivables plus an equal
+  // Lending Receivables → Allowance for Bad Debts outflow (same description, date and amount). No cash moves, so the
+  // Lending Income half is left out of inflows. Recovered amounts are logged as ordinary Lending Income and still count.
+  const pairKey = r => `${clean(r.desc).toLowerCase()}|${r.date}|${Math.round((Number(r.amount) || 0) * 100)}`;
+  const provided = {};
+  all.forEach(r => { if (r.type === 'Outflows' && clean(r.source) === 'Lending Receivables' && clean(r.dest) === BAD_DEBTS) provided[pairKey(r)] = (provided[pairKey(r)] || 0) + 1; });
+  all.forEach(r => {
     const m = String(r.date).slice(0, 7), a = Number(r.amount) || 0;
     const f = flow[m] || (flow[m] = { in: 0, out: 0, cats: {}, srcs: {} });
-    if (r.type === 'Inflow' && !INFLOW_EXCLUDE.has(clean(r.source))) { f.in += a; f.srcs[clean(r.source)] = (f.srcs[clean(r.source)] || 0) + a; }
-    else if (r.type === 'Outflows' && !x.accounts.has(clean(r.dest))) { f.out += a; f.cats[clean(r.dest)] = (f.cats[clean(r.dest)] || 0) + a; }
+    if (r.type === 'Inflow' && !INFLOW_EXCLUDE.has(clean(r.source))) {
+      if (clean(r.source) === 'Lending Income' && provided[pairKey(r)]) { provided[pairKey(r)]--; return; }
+      f.in += a; f.srcs[clean(r.source)] = (f.srcs[clean(r.source)] || 0) + a;
+    }
+    else if (r.type === 'Outflows' && clean(r.dest) !== BAD_DEBTS && !x.accounts.has(clean(r.dest))) { f.out += a; f.cats[clean(r.dest)] = (f.cats[clean(r.dest)] || 0) + a; }
   });
   const get = m => flow[m] || { in: 0, out: 0, cats: {}, srcs: {} };
   // category averages over complete months, like the Dashboard's 3/6/12-month averages

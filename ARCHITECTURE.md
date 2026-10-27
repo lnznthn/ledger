@@ -135,7 +135,8 @@ Per-person receivables are tracked by **description**: for rows whose Source or 
 
 ### Reports
 
-- **Cash flow**: monthly inflows and spending. Inflows exclude `Set-up` (opening balances), `Lending Receivables` and `Allowance for Bad Debts` (`INFLOW_EXCLUDE`). Spending is Outflows into non-accounts.
+- **Cash flow**: monthly inflows and spending. Inflows exclude `Set-up` (opening balances), `Lending Receivables` and `Allowance for Bad Debts` (`INFLOW_EXCLUDE`). Spending is Outflows into non-accounts, and never includes Outflows into `Allowance for Bad Debts`.
+- **Netted accruals**: interest on a loan that is fully provided for is logged as a pair on the same date with the same description and amount: an Inflow `Lending Income` → `Lending Receivables` and an Outflow `Lending Receivables` → `Allowance for Bad Debts`. No cash moves, so `reportData` drops the `Lending Income` half of every such pair from inflows and from Inflows by source. When those debts are recovered, the owner replaces the paired rows with ordinary `Lending Income` rows on the cadence the money actually arrives; those have no matching provision and count as inflows. Balances are unaffected, because each pair nets to zero in `Lending Receivables`.
 - **Net liquidity**: daily trend line, described above.
 - **Spending by category**: monthly averages over the last 3, 6 or 12 complete months.
 - **Inflows by source**: totals over the selected window, including the current month.
@@ -163,3 +164,4 @@ Per-person receivables are tracked by **description**: for rows whose Source or 
 | 1.6.0 | Liquidity cascade redefined (short-term investments liquid, AP out of allocations); Reports trend line is Net liquidity; Dashboard summary-cell comparison dropped |
 | 1.7.0 | Cash allocations editor with include toggle, packed into the Dashboard's four allocation slots |
 | 1.7.1 | Network-first page loading and an update check on resume, so new versions arrive on the next open |
+| 1.7.2 | Reports leave out netted accruals (Lending Income paired with an equal Allowance for Bad Debts provision) |
