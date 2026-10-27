@@ -178,3 +178,4 @@ Per-person receivables are tracked by **description**: for rows whose Source or 
 | 1.7.3 | Per-person receivables match names case-insensitively, like the Dashboard |
 | 1.8.0 | Cash flow becomes collections and disbursements of liquidity; the line becomes Liquidity before payables and reconciles with the bars; quarterly average monthly net effect |
 | 1.8.1 | 18-month span; span chips on the liquidity card; Hide/Show details on both cards; month highlight no longer covers the chart's top label; restores `sw.js`, which 1.8.0 shipped empty |
+| 1.8.2 | Hide details leaves only the chart on both Reports cards (quarterly averages and averages line included) |

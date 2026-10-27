@@ -289,7 +289,7 @@ details.card[open]>summary{border-bottom:1px solid var(--line)}
 
 <script>
 'use strict';
-const VERSION = '1.8.1';
+const VERSION = '1.8.2';
 const TYPES = ['Outflows', 'Inflow', 'Transfer'];
 const TYPE_LABEL = { Outflows: 'Outflow', Inflow: 'Inflow', Transfer: 'Transfer' };
 const LS = { cfg: 'ledger.cfg', rows: 'ledger.rows', blocks: 'ledger.blocks', snap: 'ledger.snap', queue: 'ledger.queue', prefs: 'ledger.prefs', allocs: 'ledger.allocs' };
@@ -1038,24 +1038,24 @@ function renderReports() {
   // 1. Cash flow
   html += `<div class="card pad"><div style="display:flex;justify-content:space-between;align-items:baseline"><b>Cash flow</b>
       <span class="legend" style="gap:10px"><span><i style="background:var(--in)"></i> Collections</span><span><i style="background:var(--c3)"></i> Disbursements</span></span></div>
-    <div class="muted" style="font-size:13px;margin:2px 0 12px">Average per month: collections ${esc(peso(colIn / n, { round: true }))}, disbursements ${esc(peso(colOut / n, { round: true }))}, net ${esc(peso((colIn - colOut) / n, { round: true, plus: true }))}</div>
+    ${shown('cf') ? `<div class="muted" style="font-size:13px;margin:2px 0 12px">Average per month: collections ${esc(peso(colIn / n, { round: true }))}, disbursements ${esc(peso(colOut / n, { round: true }))}, net ${esc(peso((colIn - colOut) / n, { round: true, plus: true }))}</div>` : '<div style="height:10px"></div>'}
     <div id="cfChart">${barSVG(months, cf, sel)}</div>
-    <div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px">
+    ${shown('cf') ? `<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px">
       <div style="display:flex;justify-content:space-between"><b>${esc(monLabel(sel, true))}${sel === x_ym() ? ' (so far)' : ''}</b><span class="num ${f.in - f.out < 0 ? 'v neg' : 'v in'}">${esc(peso(f.in - f.out, { plus: true }))} net</span></div>
-      ${shown('cf') ? `<div class="kvs"><span>Collections</span><span class="num">${esc(peso(f.in))}</span></div>
+      <div class="kvs"><span>Collections</span><span class="num">${esc(peso(f.in))}</span></div>
       ${top(f.srcs, 4).map(([k, v]) => `<div class="kvs sub"><span>${esc(k)}</span><span class="num">${esc(peso(v))}</span></div>`).join('')}
       <div class="kvs"><span>Disbursements</span><span class="num">${esc(peso(-f.out))}</span></div>
       ${top(f.cats, 5).map(([k, v]) => `<div class="kvs sub"><span>${esc(k)}</span><span class="num">${esc(peso(-v))}</span></div>`).join('')}
       ${openV != null && closeV != null ? `<div class="kvs" style="margin-top:6px"><span class="muted">Liquidity before payables</span><span class="num muted">${esc(peso(openV))} → ${esc(peso(closeV))}</span></div>` : ''}
-      <div class="faint" style="font-size:12px;margin-top:6px">Tap a month to see it. Collections and disbursements are money entering or leaving your liquid accounts and cards. Card purchases count when made; card payments, transfers between your own liquid accounts and accrued income don't count; payables count when you pay them.</div>` : ''}
-      ${detBtn('cf')}</div></div>`;
+      <div class="faint" style="font-size:12px;margin-top:6px">Tap a month to see it. Collections and disbursements are money entering or leaving your liquid accounts and cards. Card purchases count when made; card payments, transfers between your own liquid accounts and accrued income don't count; payables count when you pay them.</div></div>` : ''}
+      ${detBtn('cf')}</div>`;
 
   // 2. Liquidity trend: the bars above, accumulated
   const lastV = pts[pts.length - 1].v;
   const qs = quarterAverages(months, cf);
   html += `<div class="card pad"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><b>Liquidity before payables</b><span style="display:flex;gap:4px">${miniChips}</span></div>
-    <div class="muted" style="font-size:13px;margin:2px 0 4px">Liquid assets less restricted cash and credit cards. It moves only with the collections and disbursements above, over the same months.</div>
-    <div style="margin:6px 0 2px">${qs.map(q => `<div class="kvs sub"><span>${esc(q.label)}</span><span class="num v ${q.avg < 0 ? 'neg' : 'in'}">${esc(peso(q.avg, { plus: true, round: true }))} per month</span></div>`).join('')}</div>
+    ${shown('ln') ? `<div class="muted" style="font-size:13px;margin:2px 0 4px">Liquid assets less restricted cash and credit cards. It moves only with the collections and disbursements above, over the same months.</div>
+    <div style="margin:6px 0 2px">${qs.map(q => `<div class="kvs sub"><span>${esc(q.label)}</span><span class="num v ${q.avg < 0 ? 'neg' : 'in'}">${esc(peso(q.avg, { plus: true, round: true }))} per month</span></div>`).join('')}</div>` : ''}
     <div id="lnRead" class="num" style="font-weight:650;font-size:20px;margin:6px 0">${esc(peso(lastV))} <span class="muted" style="font-size:13px;font-weight:500">today</span></div>
     ${lineSVG(pts)}${shown('ln') ? `<div class="faint" style="font-size:12px;margin-top:6px">Drag across the chart to read any day.</div>
     ${netLiqTodayHTML(lastV)}` : ''}${detBtn('ln')}</div>`;
