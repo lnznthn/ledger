@@ -1,6 +1,6 @@
 # Ledger: how the app works
 
-Ledger is a single-page iPhone home-screen web app (PWA) over the owner's Personal Finances Google Sheet. It is local-first: the phone keeps the full Transactions log, computes every balance itself, and only uses the sheet to download new rows, write new rows, and read a few Dashboard values it cannot derive from the log. This file is the reference for anyone changing the app, so that the logic below does not have to be rediscovered from chat history.
+Ledger is a single-page web app (PWA) over the owner's Personal Finances Google Sheet, installed on the iPhone home screen and also opened in a desktop browser, where it shows a dashboard layout (see Layouts). It is local-first: the phone keeps the full Transactions log, computes every balance itself, and only uses the sheet to download new rows, write new rows, and read a few Dashboard values it cannot derive from the log. This file is the reference for anyone changing the app, so that the logic below does not have to be rediscovered from chat history.
 
 This repository is public and served by GitHub Pages. Keep balances, account numbers, people's names, the spreadsheet ID and the connection key out of this file and out of the code.
 
@@ -21,6 +21,19 @@ The back end is a Google Apps Script web app (`Code.gs`) bound to the spreadshee
 3. Never commit an empty or truncated `sw.js`. Versions 1.3.1 and 1.8.0 each shipped an empty `sw.js` by accident (1.8.0's came from a script that opened the file for writing before reading it), breaking offline launch until 1.5.2 and 1.8.1 restored it. Check `test -s sw.js && node --check sw.js` before every commit.
 4. Check the script parses, for example `node -e "const h=require('fs').readFileSync('index.html','utf8');new Function(h.slice(h.indexOf('<script>')+8,h.lastIndexOf('</script>')))"`.
 5. Commit and push to `main`. From v1.7.1, the next launch or resume with signal runs the new version. Earlier versions were cache-first and needed two launches.
+
+## Layouts
+
+The same `index.html` has two layouts, and `applyLayout()` picks one when the page loads.
+
+- **Phone:** the four tabs (Reports, Balances, Activity, Add) with the bottom tab bar. This is the original app and is unchanged.
+- **Desktop dashboard:** the `pc` class on `<html>`. Balances, Reports and Activity sit side by side in three columns that scroll independently, and the tab bar is hidden. Add becomes a centred modal opened from the header's Add transaction button or the N key, and every other sheet (settings, bulk import, row details, allocations) becomes a centred dialog. The queue of entries waiting to reach the sheet moves to the top of the Activity column.
+
+Auto mode chooses the dashboard when the media query `(hover: hover) and (pointer: fine) and (min-width: 1000px)` matches, meaning a mouse or trackpad and a window at least 1,000px wide, and re-checks whenever that query changes, so narrowing a desktop window drops to the phone layout. Settings → Layout can force Phone or Desktop (`prefs.layout`: `auto`, `phone` or `pc`).
+
+On the dashboard, `renderView()` renders all three columns, and `switchTab(t)` opens the Add modal for `add` and otherwise re-renders and briefly highlights that column (for example after tapping an account on Balances, which filters Activity). Keyboard: N opens Add, / focuses the Activity search, Enter saves in the modal (Enter on the description takes the top suggestion), Shift+Enter saves and keeps the modal open, Esc closes the top layer.
+
+Each browser keeps its own `localStorage`, so a computer is connected separately in Settings with the same connection code, and its first sync downloads the full log.
 
 ## The sheet
 
@@ -169,7 +182,7 @@ Per-person receivables are tracked by **description**: for rows whose Source or 
 
 - Money displays in finance style: negatives in parentheses, `(₱1,200.00)`, via `peso()`.
 - `TOL = 1`: differences of ₱1 or less are treated as zero, matching the Dashboard.
-- Tab order is Reports, Balances, Activity, Add.
+- Tab order is Reports, Balances, Activity, Add. Dashboard column order is Balances, Reports, Activity.
 - Dates are stored as ISO `YYYY-MM-DD` on the phone and written to the sheet as `MM/DD/YY`.
 
 ## Version history
@@ -193,3 +206,4 @@ Per-person receivables are tracked by **description**: for rows whose Source or 
 | 1.8.1 | 18-month span; span chips on the liquidity card; Hide/Show details on both cards; month highlight no longer covers the chart's top label; restores `sw.js`, which 1.8.0 shipped empty |
 | 1.8.2 | Hide details leaves only the chart on both Reports cards (quarterly averages and averages line included) |
 | 1.9.0 | Reports line is Net liquidity; pool covers every spendable account and Accounts Payable at exact balances (no flooring), so own-account transfers no longer show as flows; restricted top-ups count as disbursements |
+| 1.10.0 | Desktop dashboard layout, detected on load: three columns, Add as a modal, centred dialogs, keyboard shortcuts; Settings → Layout override |
