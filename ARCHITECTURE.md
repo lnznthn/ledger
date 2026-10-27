@@ -131,7 +131,7 @@ Assets: Wallets (after earmarks), Savings, Restricted cash (Dashboard values), S
 
 ### Receivables
 
-Per-person receivables are tracked by **description**: for rows whose Source or Destination is `Lending Receivables` or `Other Receivables`, the Transaction text is the person's name, and the balance is money into those accounts minus money out. People on the Dashboard's Receivables list are compared with the Dashboard; people only in the log appear under "Also open in the log" and are excluded from the total.
+Per-person receivables are tracked by **description**: for rows whose Source or Destination is `Lending Receivables` or `Other Receivables`, the Transaction text is the person's name, and the balance is money into those accounts minus money out. Names match case-insensitively and ignore repeated spaces, the same way the Dashboard's `SUMIF` treats them, and the most recent spelling is the one displayed. People on the Dashboard's Receivables list are compared with the Dashboard; people only in the log appear under "Also open in the log" and are excluded from the total.
 
 ### Reports
 
@@ -165,3 +165,4 @@ Per-person receivables are tracked by **description**: for rows whose Source or 
 | 1.7.0 | Cash allocations editor with include toggle, packed into the Dashboard's four allocation slots |
 | 1.7.1 | Network-first page loading and an update check on resume, so new versions arrive on the next open |
 | 1.7.2 | Reports leave out netted accruals (Lending Income paired with an equal Allowance for Bad Debts provision) |
+| 1.7.3 | Per-person receivables match names case-insensitively, like the Dashboard |

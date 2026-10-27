@@ -289,7 +289,7 @@ details.card[open]>summary{border-bottom:1px solid var(--line)}
 
 <script>
 'use strict';
-const VERSION = '1.7.2';
+const VERSION = '1.7.3';
 const TYPES = ['Outflows', 'Inflow', 'Transfer'];
 const TYPE_LABEL = { Outflows: 'Outflow', Inflow: 'Inflow', Transfer: 'Transfer' };
 const LS = { cfg: 'ledger.cfg', rows: 'ledger.rows', blocks: 'ledger.blocks', snap: 'ledger.snap', queue: 'ledger.queue', prefs: 'ledger.prefs', allocs: 'ledger.allocs' };
@@ -328,6 +328,7 @@ const nf0 = new Intl.NumberFormat('en-PH', { maximumFractionDigits: 0 });
 const peso = (n, opt = {}) => { if (n == null) return '—'; const body = '₱' + (opt.round ? nf0 : nf).format(Math.abs(n)); return n < -0.004 ? '(' + body + ')' : (opt.plus ? '+' : '') + body; };
 const r2 = n => Math.round(n * 100) / 100;
 const clean = s => String(s || '').trim();
+const recKey = s => clean(s).replace(/\s+/g, ' ').toLowerCase();   // per-person receivable key
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
 function isoDay(offset = 0) { const d = new Date(); d.setDate(d.getDate() + offset); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); }
 function parseISO(s) { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s || ''); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; }
@@ -379,12 +380,14 @@ function derived() {
   pend.forEach(e => apply(live, e));
 
   // receivables per person: description-level net of Lending/Other Receivables movements
-  const recv = {};
+  // Names match case-insensitively, like the Dashboard's SUMIF; the most recent spelling is the one shown.
+  const recv = {}, recvName = {};
   const recSet = new Set(RECEIVABLE_ACCTS);
   rows.concat(pend).forEach(r => {
-    const name = clean(r.desc), a = Number(r.amount) || 0;
-    if (recSet.has(clean(r.dest))) recv[name] = (recv[name] || 0) + a;
-    if (recSet.has(clean(r.source))) recv[name] = (recv[name] || 0) - a;
+    if (!recSet.has(clean(r.dest)) && !recSet.has(clean(r.source))) return;
+    const name = clean(r.desc), k = recKey(name), a = Number(r.amount) || 0; recvName[k] = name;
+    if (recSet.has(clean(r.dest))) recv[k] = (recv[k] || 0) + a;
+    if (recSet.has(clean(r.source))) recv[k] = (recv[k] || 0) - a;
   });
 
   // this month's spending by category (Outflows into a non-account destination)
@@ -419,10 +422,10 @@ function derived() {
   const diffs = Object.keys(sheetBy).map(n => ({ name: n, app: r2(synced[n] || 0), sheet: r2(sheetBy[n]), diff: r2((synced[n] || 0) - sheetBy[n]) }))
     .filter(x => Math.abs(x.diff) > TOL && !(x.sheet === 0 && Math.abs(x.app) <= TOL));
   const dashRec = dash.groups.find(g => /receivable/i.test(g.label));
-  const recDiffs = dashRec ? dashRec.items.map(it => ({ name: clean(it.name), app: r2(recv[clean(it.name)] || 0), sheet: r2(it.value) }))
+  const recDiffs = dashRec ? dashRec.items.map(it => ({ name: clean(it.name), app: r2(recv[recKey(it.name)] || 0), sheet: r2(it.value) }))
     .filter(x => Math.abs(x.app - x.sheet) > TOL) : [];
 
-  D = { accounts, synced, live, pend, recv, cats, monthTotal, ym, templates, freqS, freqD, sheetBy, diffs, dashRec, recDiffs, checked: Object.keys(sheetBy).length };
+  D = { accounts, synced, live, pend, recv, recvName, cats, monthTotal, ym, templates, freqS, freqD, sheetBy, diffs, dashRec, recDiffs, checked: Object.keys(sheetBy).length };
   return D;
 }
 const bal = name => r2(derived().live[clean(name)] || 0);
@@ -651,9 +654,9 @@ function balanceSheet(dash) {
   const plain = re => items(re).map(it => line(it, bal(it.name)));
   const restricted = items(EARMARK).map(it => line(it, it.value, 'earmarked portion'));
   const recG = dash.groups.find(g => /receivable/i.test(g.label));
-  const recv = (recG ? recG.items : []).map(it => ({ name: clean(it.name), value: r2(x.recv[clean(it.name)] || 0), who: true, sheet: it.value }));
-  const onDash = new Set(recv.map(r => r.name));
-  const recvExtra = Object.entries(x.recv).filter(([n, v]) => v >= TOL && !onDash.has(n)).sort((a, b) => b[1] - a[1]).map(([n, v]) => ({ name: n, value: r2(v), who: true }));
+  const recv = (recG ? recG.items : []).map(it => ({ name: clean(it.name), value: r2(x.recv[recKey(it.name)] || 0), who: true, sheet: it.value }));
+  const onDash = new Set(recv.map(r => recKey(r.name)));
+  const recvExtra = Object.entries(x.recv).filter(([k, v]) => v >= TOL && !onDash.has(k)).sort((a, b) => b[1] - a[1]).map(([k, v]) => ({ name: x.recvName[k], value: r2(v), who: true }));
   const cards = items(/credit/i).map(it => line(it, -bal(it.name), bal(it.name) > 0.004 ? 'credit balance' : ''));
   const ap = [{ name: 'Accounts Payable', value: apAmount(dash), acct: x.accounts.has(AP_NAME) }];
   const total = arr => r2(arr.reduce((s, i) => s + (i.total != null ? i.total : i.value), 0));
