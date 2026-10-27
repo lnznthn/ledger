@@ -9,7 +9,7 @@ This repository is public and served by GitHub Pages. Keep balances, account num
 | File | Role |
 | --- | --- |
 | `index.html` | The whole app: markup, CSS and one `<script>`. Version is the `VERSION` constant near the top of the script. |
-| `sw.js` | Service worker. Caches the app shell so it opens instantly and works offline. Never caches sheet data. |
+| `sw.js` | Service worker. The page is network-first (3-second budget, then the cached copy), so any launch with signal runs the newest version; icons and the manifest are cache-first. Never caches sheet data. |
 | `manifest.webmanifest`, `icons/` | Home-screen install metadata. |
 
 The back end is a Google Apps Script web app (`Code.gs`) bound to the spreadsheet. Apart from `apps-script/allocations.gs`, its source is **not** in this repo; it lives in the sheet's Apps Script project (Extensions → Apps Script). Changing it needs the owner's Google sign-in. Changes to this repo need only a push to `main`; GitHub Pages republishes in about a minute.
@@ -20,7 +20,7 @@ The back end is a Google Apps Script web app (`Code.gs`) bound to the spreadshee
 2. Bump `CACHE` in `sw.js` to the same version (`ledger-vX.Y.Z`). The browser only installs a new service worker when the bytes of `sw.js` change, so skipping this means phones keep the old app.
 3. Never commit an empty or truncated `sw.js`. Version 1.3.1 shipped an empty `sw.js` by accident and offline launch was broken until 1.5.2 restored it.
 4. Check the script parses, for example `node -e "const h=require('fs').readFileSync('index.html','utf8');new Function(h.slice(h.indexOf('<script>')+8,h.lastIndexOf('</script>')))"`.
-5. Commit and push to `main`. Phones download the update in the background on next open and run it from the launch after that (the app shows a toast when an update is ready).
+5. Commit and push to `main`. From v1.7.1, the next launch or resume with signal runs the new version. Earlier versions were cache-first and needed two launches.
 
 ## The sheet
 
@@ -162,3 +162,4 @@ Per-person receivables are tracked by **description**: for rows whose Source or 
 | 1.5.2 | Liquid balance → Net liquidity bridge on Reports; `sw.js` restored; this document |
 | 1.6.0 | Liquidity cascade redefined (short-term investments liquid, AP out of allocations); Reports trend line is Net liquidity; Dashboard summary-cell comparison dropped |
 | 1.7.0 | Cash allocations editor with include toggle, packed into the Dashboard's four allocation slots |
+| 1.7.1 | Network-first page loading and an update check on resume, so new versions arrive on the next open |
