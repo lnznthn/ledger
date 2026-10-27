@@ -1,7 +1,7 @@
 // Ledger service worker: keeps the app's own files on the phone so it opens offline.
 // The page itself is network-first, so any launch with signal runs the newest version;
 // the cached copy is the offline fallback. Data requests to the sheet are never cached here.
-const CACHE = 'ledger-v1.8.2';
+const CACHE = 'ledger-v1.9.0';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', e => {

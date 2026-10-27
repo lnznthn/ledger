@@ -289,7 +289,7 @@ details.card[open]>summary{border-bottom:1px solid var(--line)}
 
 <script>
 'use strict';
-const VERSION = '1.8.2';
+const VERSION = '1.9.0';
 const TYPES = ['Outflows', 'Inflow', 'Transfer'];
 const TYPE_LABEL = { Outflows: 'Outflow', Inflow: 'Inflow', Transfer: 'Transfer' };
 const LS = { cfg: 'ledger.cfg', rows: 'ledger.rows', blocks: 'ledger.blocks', snap: 'ledger.snap', queue: 'ledger.queue', prefs: 'ledger.prefs', allocs: 'ledger.allocs' };
@@ -910,27 +910,33 @@ function reportData() {
   R = { D: x, get, avg: { 3: avg(3), 6: avg(6), 12: avg(12), 18: avg(18) } };
   return R;
 }
-/** Collections, disbursements and the liquidity line from one pass over the log, so they reconcile by construction.
- *  The pool is wallets (net of maintaining balances), savings, short-term investments and credit cards. Accounts
- *  payable is outside it: spending funded by a payable moves nothing until the payable is paid from the pool.
- *  Each row's effect is the pool's value after the row less its value before, so accruals and transfers inside the
- *  pool are zero, and money moved into a maintaining balance reads as a disbursement. Rows dated after today are left
- *  out of both. Maintaining balances: a wallet whose earmark equals its whole balance today is an unused account, so
- *  it is fully restricted on every day; otherwise the earmark is a cap, and only the excess over it counts. */
+/** Collections, disbursements and the Net liquidity line from one pass over the log, so they reconcile by construction.
+ *  The pool is every account money can be spent from (the Data tab's Outflows sources and the Dashboard's wallet,
+ *  savings, short-term and credit groups), plus Accounts Payable. Receivables, the allowance, long-term investments
+ *  and ventures are outside it. Each account counts at its exact log balance, except maintaining balances: an
+ *  account whose earmark equals its whole balance today is fully restricted on every day, and any other earmark is a
+ *  cap, so only the excess counts. A row's effect is the pool's value after it less before: income into the pool is a
+ *  collection; spending from an account, a card or a payable is a disbursement; lending out, paying into
+ *  investments or ventures, and moving money into a maintaining balance are disbursements, and the reverse moves are
+ *  collections; accruals and transfers inside the pool (card and payable payments, account to account) are zero.
+ *  Rows dated after today are left out of both. */
 let LQ = null;
+const NOT_POOL = new Set(['Lending Receivables', 'Other Receivables', BAD_DEBTS]);
 function liqLedger(start) {
   const x = derived();
   if (LQ && LQ.D === x && LQ.start === start) return LQ;
   const dash = snap.dashboard; const em = earmarkMap(dash);
-  const modes = {};
-  groupItems(dash, /wallet/i).forEach(it => { const n = clean(it.name), e = em[n] || 0; modes[n] = !e ? 0 : Math.abs(bal(n) - e) <= TOL ? 'full' : e; });
-  const linear = new Set();
-  groupItems(dash, /saving/i).concat(groupItems(dash, /short term/i), groupItems(dash, /credit/i)).forEach(it => { const n = clean(it.name); if (!(n in modes)) linear.add(n); });
-  const tracked = n => n in modes || linear.has(n);
-  const worth = (n, raw) => n in modes ? (modes[n] === 'full' ? 0 : walletNet(raw, modes[n] ? Math.min(raw, modes[n]) : 0)) : linear.has(n) ? raw : 0;
-  const today = isoDay(0); const run = {}; const dayDelta = {}; const flow = {};
+  const outside = new Set([...NOT_POOL, ...groupItems(dash, /long term/i).map(it => clean(it.name)), ...groupItems(dash, /venture/i).map(it => clean(it.name)), ...groupItems(dash, /receivable/i).map(it => clean(it.name))]);
+  const pool = new Set([AP_NAME]);
+  Object.keys(optMap().Outflows || {}).map(clean).forEach(n => { if (n && !outside.has(n)) pool.add(n); });
+  [/wallet/i, /saving/i, /short term/i, /credit/i].forEach(re => groupItems(dash, re).forEach(it => { const n = clean(it.name); if (!outside.has(n)) pool.add(n); }));
+  const caps = {};
+  Object.keys(em).forEach(n => { if (pool.has(n) && em[n]) caps[n] = Math.abs(bal(n) - em[n]) <= TOL ? 'full' : em[n]; });
+  const tracked = n => pool.has(n);
+  const worth = (n, raw) => !pool.has(n) ? 0 : caps[n] === 'full' ? 0 : caps[n] ? Math.max(raw - caps[n], 0) : raw;
+  const today = isoDay(0); const run = {}; const dayDelta = {}; const flow = {}; let futureDelta = 0;
   const all = rows.map((r, i) => [r, i]).concat(x.pend.map((r, i) => [r, rows.length + i]))
-    .filter(([r]) => r.date <= today).sort((p, q) => p[0].date < q[0].date ? -1 : p[0].date > q[0].date ? 1 : p[1] - q[1]).map(p => p[0]);
+    .sort((p, q) => p[0].date < q[0].date ? -1 : p[0].date > q[0].date ? 1 : p[1] - q[1]).map(p => p[0]);
   const add = (o, k, v) => o[k] = (o[k] || 0) + v;
   all.forEach(r => {
     const sc = clean(r.source), d = clean(r.dest), a = Number(r.amount) || 0;
@@ -938,35 +944,34 @@ function liqLedger(start) {
     const names = sc === d ? [sc] : [sc, d];
     const before = names.reduce((v, n) => v + worth(n, run[n] || 0), 0);
     run[d] = (run[d] || 0) + a; run[sc] = (run[sc] || 0) - a;
-    if (r.date < start) return;
     const delta = r2(names.reduce((v, n) => v + worth(n, run[n] || 0), 0) - before);
-    if (Math.abs(delta) < 0.005) return;
+    if (r.date > today) { futureDelta += delta; return; }
+    if (r.date < start || Math.abs(delta) < 0.005) return;
     add(dayDelta, r.date, delta);
     const m = r.date.slice(0, 7), f = flow[m] || (flow[m] = { in: 0, out: 0, srcs: {}, cats: {} });
-    const label = tracked(d) && !tracked(sc) ? sc : tracked(sc) && !tracked(d) ? d : 'Maintaining balances';
+    const capped = caps[sc] ? sc : caps[d] ? d : null;
+    const label = tracked(d) && !tracked(sc) ? sc : tracked(sc) && !tracked(d) ? d : `${capped || 'Maintaining'} balance`;
     if (delta > 0) { f.in += delta; add(f.srcs, label, delta); } else { f.out -= delta; add(f.cats, label, -delta); }
   });
-  // value at the start of the window, then one point per day
+  // today's value less the in-window and future effects gives the value at the window start
   let v = 0; for (const n in run) v += worth(n, run[n]);
-  // run now holds today's balances; step back to the window start by removing in-window effects
-  const inWindow = Object.values(dayDelta).reduce((s2, z) => s2 + z, 0);
-  v = r2(v - inWindow);
+  v = r2(v - futureDelta - Object.values(dayDelta).reduce((s2, z) => s2 + z, 0));
   const base = v; const pts = []; const days = Math.round((parseISO(today) - parseISO(start)) / 864e5) + 1;
   for (let k = days - 1; k >= 0; k--) { const day = isoDay(-k); v = r2(v + (dayDelta[day] || 0)); pts.push({ day, v }); }
   const get = m => flow[m] || { in: 0, out: 0, srcs: {}, cats: {} };
-  LQ = { D: x, start, base, pts, get };
+  LQ = { D: x, start, base, pts, get, futureDelta: r2(futureDelta) };
   return LQ;
 }
-function netLiqTodayHTML(lastV) {
-  const c = cascade(snap.dashboard); const beforeAP = r2(c.nl + c.ap); const future = r2(beforeAP - lastV);
-  return `<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px"><b style="font-size:14.5px">Today</b>
+function netLiqTodayHTML(L) {
+  const c = cascade(snap.dashboard); const lastV = L.pts[L.pts.length - 1].v; const gap = r2(c.nl - lastV - L.futureDelta);
+  return `<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px"><b style="font-size:14.5px">Today, from Balances</b>
     <div class="kvs"><span>Liquid assets</span><span class="num">${esc(peso(c.liquid))}</span></div>
     <div class="kvs sub"><span>Less restricted cash</span><span class="num">${esc(peso(-c.restricted))}</span></div>
-    <div class="kvs sub"><span>Less credit cards owed</span><span class="num">${esc(peso(-c.cards))}</span></div>
-    <div class="kvs"><span><b>Liquidity before payables</b></span><span class="num"><b>${esc(peso(beforeAP))}</b></span></div>
     <div class="kvs sub"><span>Less accounts payable</span><span class="num">${esc(peso(-c.ap))}</span></div>
-    <div class="kvs"><span>Net liquidity <span class="muted" style="font-size:12.5px">(Balances)</span></span><span class="num">${esc(peso(c.nl))}</span></div>
-    ${Math.abs(future) >= 0.005 ? `<div class="faint" style="font-size:12px;margin-top:4px">Includes ${esc(peso(future, { plus: true }))} from entries dated after today, which the charts leave off.</div>` : ''}</div>`;
+    <div class="kvs sub"><span>Less credit cards owed</span><span class="num">${esc(peso(-c.cards))}</span></div>
+    <div class="kvs"><span><b>Net liquidity</b></span><span class="num"><b>${esc(peso(c.nl))}</b></span></div>
+    ${Math.abs(L.futureDelta) >= 0.005 ? `<div class="faint" style="font-size:12px;margin-top:4px">Includes ${esc(peso(L.futureDelta, { plus: true }))} from entries dated after today, which the charts leave off.</div>` : ''}
+    ${Math.abs(gap) > TOL ? `<div class="faint" style="font-size:12px;margin-top:4px">The chart reads ${esc(peso(lastV))}: it counts every account at its exact log balance, including negatives and accounts not on the Dashboard, so it differs from Balances by ${esc(peso(gap))}.</div>` : ''}</div>`;
 }
 /** Average monthly net effect for each calendar quarter in the window (months in the window only; the current one so far). */
 function quarterAverages(months, get) {
@@ -1046,19 +1051,19 @@ function renderReports() {
       ${top(f.srcs, 4).map(([k, v]) => `<div class="kvs sub"><span>${esc(k)}</span><span class="num">${esc(peso(v))}</span></div>`).join('')}
       <div class="kvs"><span>Disbursements</span><span class="num">${esc(peso(-f.out))}</span></div>
       ${top(f.cats, 5).map(([k, v]) => `<div class="kvs sub"><span>${esc(k)}</span><span class="num">${esc(peso(-v))}</span></div>`).join('')}
-      ${openV != null && closeV != null ? `<div class="kvs" style="margin-top:6px"><span class="muted">Liquidity before payables</span><span class="num muted">${esc(peso(openV))} → ${esc(peso(closeV))}</span></div>` : ''}
-      <div class="faint" style="font-size:12px;margin-top:6px">Tap a month to see it. Collections and disbursements are money entering or leaving your liquid accounts and cards. Card purchases count when made; card payments, transfers between your own liquid accounts and accrued income don't count; payables count when you pay them.</div></div>` : ''}
+      ${openV != null && closeV != null ? `<div class="kvs" style="margin-top:6px"><span class="muted">Net liquidity</span><span class="num muted">${esc(peso(openV))} → ${esc(peso(closeV))}</span></div>` : ''}
+      <div class="faint" style="font-size:12px;margin-top:6px">Tap a month to see it. Collections and disbursements move Net liquidity. Spending counts when made, whether from an account, a card or a payable; lending out, investing and topping up a maintaining balance are disbursements, and their reverse are collections. Card and payable payments, transfers between your accounts and accrued income don't count.</div></div>` : ''}
       ${detBtn('cf')}</div>`;
 
   // 2. Liquidity trend: the bars above, accumulated
   const lastV = pts[pts.length - 1].v;
   const qs = quarterAverages(months, cf);
-  html += `<div class="card pad"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><b>Liquidity before payables</b><span style="display:flex;gap:4px">${miniChips}</span></div>
-    ${shown('ln') ? `<div class="muted" style="font-size:13px;margin:2px 0 4px">Liquid assets less restricted cash and credit cards. It moves only with the collections and disbursements above, over the same months.</div>
+  html += `<div class="card pad"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><b>Net liquidity</b><span style="display:flex;gap:4px">${miniChips}</span></div>
+    ${shown('ln') ? `<div class="muted" style="font-size:13px;margin:2px 0 4px">Liquid assets less restricted cash, accounts payable and credit cards. It moves only with the collections and disbursements above, over the same months.</div>
     <div style="margin:6px 0 2px">${qs.map(q => `<div class="kvs sub"><span>${esc(q.label)}</span><span class="num v ${q.avg < 0 ? 'neg' : 'in'}">${esc(peso(q.avg, { plus: true, round: true }))} per month</span></div>`).join('')}</div>` : ''}
     <div id="lnRead" class="num" style="font-weight:650;font-size:20px;margin:6px 0">${esc(peso(lastV))} <span class="muted" style="font-size:13px;font-weight:500">today</span></div>
     ${lineSVG(pts)}${shown('ln') ? `<div class="faint" style="font-size:12px;margin-top:6px">Drag across the chart to read any day.</div>
-    ${netLiqTodayHTML(lastV)}` : ''}${detBtn('ln')}</div>`;
+    ${netLiqTodayHTML(L)}` : ''}${detBtn('ln')}</div>`;
 
   // 3. Spending by category, monthly averages over complete months
   const av = rd.avg[n]; const cur = rd.get(x_ym()).cats;
