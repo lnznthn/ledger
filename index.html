@@ -162,6 +162,11 @@ details.card[open]>summary{border-bottom:1px solid var(--line)}
 .sheet label{display:block;margin:12px 0 6px}
 .sheet input.txt{width:100%;padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);font-size:16px;outline:0}
 .sheet input.txt:focus{border-color:var(--accent)}
+.sheet select.txt{width:100%;padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);font-size:16px;outline:0;-webkit-appearance:none;appearance:none}
+.sheet select.txt:focus{border-color:var(--accent)}
+.sheet .seg{margin:0}
+.sheet .efx{font-size:13.5px;color:var(--muted);margin-top:14px;line-height:1.5}
+.sheet .efx b{color:var(--ink);font-weight:600}
 .sheet p{font-size:14.5px;color:var(--muted);margin:6px 0}
 .toast{position:fixed;left:50%;top:calc(var(--safe-t) + 62px);transform:translate(-50%,-12px);z-index:50;background:var(--ink);color:var(--bg);
   padding:10px 16px;border-radius:12px;font-size:14.5px;font-weight:500;opacity:0;pointer-events:none;transition:all .25s;max-width:88vw;text-align:center}
@@ -342,7 +347,7 @@ html.pc .sheet .grab{display:none}
 
 <script>
 'use strict';
-const VERSION = '1.10.0';
+const VERSION = '1.11.0';
 const TYPES = ['Outflows', 'Inflow', 'Transfer'];
 const TYPE_LABEL = { Outflows: 'Outflow', Inflow: 'Inflow', Transfer: 'Transfer' };
 const LS = { cfg: 'ledger.cfg', rows: 'ledger.rows', blocks: 'ledger.blocks', snap: 'ledger.snap', queue: 'ledger.queue', prefs: 'ledger.prefs', allocs: 'ledger.allocs' };
@@ -1327,8 +1332,10 @@ function openRow(r) {
     <div class="kv"><span>Destination</span><span>${esc(clean(r.dest))}</span></div>
     <div class="kv"><span>Amount</span><span class="num">${esc(peso(Number(r.amount)))}</span></div>
     <div class="btns"><button class="primary" id="again">Log again for today</button>
+    <button class="secondary" id="editRow">Edit</button>
     <button class="secondary" id="copytsv">Copy as sheet row</button>
     <button class="secondary" id="closeS">Close</button></div>`);
+  $('#editRow').onclick = () => openEdit(r);
   $('#again').onclick = () => {
     closeSheet(); switchTab('add');
     $('#desc').value = r.desc; $('#amt').value = String(r.amount); $('#date').value = isoDay(0);
@@ -1337,6 +1344,107 @@ function openRow(r) {
   };
   $('#copytsv').onclick = async () => { try { await navigator.clipboard.writeText(tsv); toast('Copied'); } catch (e) { toast('Copy failed', 'err'); } };
   $('#closeS').onclick = closeSheet;
+}
+
+/* ---------- Edit a logged row ----------
+   A queued entry is changed in the queue. A sheet row is rewritten in place through the editRow action
+   (apps-script/edits.gs), which only writes if the sheet still holds the row exactly as last synced. */
+function openEdit(r) {
+  if (!snap) { toast('Sync once first so the app knows your accounts', 'err'); return; }
+  const orig = { date: r.date, desc: r.desc, type: r.type, source: r.source, dest: r.dest, amount: r2(Number(r.amount)) };
+  const st = { type: TYPES.includes(r.type) ? r.type : 'Outflows' };
+  openSheet(`<h2>Edit transaction</h2><p>${r.pending ? 'Queued on ' + here() + ', not yet in the sheet' : 'Row ' + r.row + ' of Transactions'}</p>
+    <label for="eAmt" class="label">Amount</label><input class="txt" id="eAmt" inputmode="decimal" value="${esc(String(orig.amount))}" autocomplete="off">
+    <label class="label">Type</label><div class="seg" id="eType">${TYPES.map(t => `<button data-type="${t}">${TYPE_LABEL[t]}</button>`).join('')}</div>
+    <label for="eDesc" class="label">Description</label><input class="txt" id="eDesc" value="${esc(r.desc)}" autocomplete="off" autocorrect="off" spellcheck="false">
+    <label for="eSrc" class="label" id="eSrcL">From</label><select class="txt" id="eSrc"></select>
+    <label for="eDst" class="label" id="eDstL">To</label><select class="txt" id="eDst"></select>
+    <label for="eDate" class="label">Date</label><input class="txt" type="date" id="eDate" value="${esc(r.date)}">
+    <div id="eNote"></div>
+    <div class="btns"><button class="primary" id="eSave">Save changes</button><button class="secondary" id="closeS">Cancel</button></div>`);
+
+  // Keep the row's own values selectable even if the Data tab no longer lists them, so opening the editor never changes them silently.
+  const LEGACY = ' (not in the Data tab)';
+  const opts = (list, keep) => { const m = canon(keep, list); return { list: m || !keep ? list : [keep].concat(list), sel: m || keep }; };
+  const fill = (sel, list, value, legacy) => {
+    sel.innerHTML = list.map(v => `<option value="${esc(v)}">${esc(clean(v))}${v === legacy ? LEGACY : ''}</option>`).join('');
+    sel.value = list.includes(value) ? value : (list[0] || '');
+  };
+  const drawDests = keep => {
+    const src = $('#eSrc').value; let list = destsFor(st.type, src), legacy = null;
+    if (st.type === orig.type && clean(src) === clean(orig.source)) { const o = opts(list, orig.dest); if (o.list !== list) legacy = orig.dest; list = o.list; keep = keep || o.sel; }
+    fill($('#eDst'), list, keep && canon(keep, list) || keep, legacy);
+  };
+  const draw = (keepSrc, keepDst) => {
+    document.querySelectorAll('#eType button').forEach(b => b.classList.toggle('on', b.dataset.type === st.type));
+    $('#eSrcL').textContent = st.type === 'Inflow' ? 'Income from' : 'From';
+    $('#eDstL').textContent = st.type === 'Inflow' ? 'Into' : st.type === 'Outflows' ? 'Category' : 'To';
+    let list = sourcesFor(st.type), legacy = null;
+    if (st.type === orig.type) { const o = opts(list, orig.source); if (o.list !== list) legacy = orig.source; list = o.list; keepSrc = keepSrc || o.sel; }
+    fill($('#eSrc'), list, keepSrc && canon(keepSrc, list) || keepSrc, legacy);
+    drawDests(keepDst);
+    note();
+  };
+  const read = () => ({ date: $('#eDate').value, desc: clean($('#eDesc').value), type: st.type, source: $('#eSrc').value, dest: $('#eDst').value, amount: parseAmount($('#eAmt').value) });
+  const changed = e => ['date', 'desc', 'type', 'source', 'dest'].some(k => clean(e[k]) !== clean(orig[k])) || Math.abs(e.amount - orig.amount) >= 0.005;
+  const pairOK = e => (destsFor(e.type, e.source).includes(e.dest) && !RETIRED.has(clean(e.source)))
+    || (e.type === orig.type && clean(e.source) === clean(orig.source) && clean(e.dest) === clean(orig.dest));
+  // what the change does to each balance: reverse the old row, apply the new one
+  function note(msg) {
+    const e = read(), fx = {}, add = (n, v) => { n = clean(n); fx[n] = r2((fx[n] || 0) + v); };
+    if (e.amount > 0 && e.source && e.dest) { add(orig.dest, -orig.amount); add(orig.source, orig.amount); add(e.dest, e.amount); add(e.source, -e.amount); }
+    const acc = derived().accounts;
+    const lines = Object.entries(fx).filter(([, v]) => Math.abs(v) >= 0.005).sort((a, b) => (acc.has(b[0]) - acc.has(a[0])))
+      .map(([n, v]) => `<b>${esc(n)}</b> ${esc(peso(v, { plus: true }))}${acc.has(n) ? ` → ${esc(peso(r2(bal(n) + v)))}` : ''}`);
+    const parts = [];
+    if (msg) parts.push(`<div class="banner" style="margin:14px 0 0">${esc(msg)}</div>`);
+    if (e.source && e.dest && !pairOK(e)) parts.push(`<div class="banner warn" style="margin:14px 0 0">${esc(clean(e.source))} → ${esc(clean(e.dest))} isn’t a valid ${esc(TYPE_LABEL[e.type])} pair in the Data tab.</div>`);
+    if (lines.length) parts.push(`<div class="efx">Balance effect: ${lines.join(' · ')}</div>`);
+    $('#eNote').innerHTML = parts.join('');
+  }
+
+  $('#eType').onclick = ev => { const b = ev.target.closest('button'); if (!b) return; st.type = b.dataset.type; draw($('#eSrc').value, $('#eDst').value); };
+  $('#eSrc').onchange = () => { drawDests($('#eDst').value); note(); };
+  ['#eDst', '#eDate'].forEach(s => $(s).onchange = () => note());
+  ['#eAmt', '#eDesc'].forEach(s => $(s).addEventListener('input', () => note()));
+  $('#closeS').onclick = closeSheet;
+
+  $('#eSave').onclick = async () => {
+    const e = read(), btn = $('#eSave');
+    if (!(e.amount > 0)) { toast('Enter an amount', 'err'); return; }
+    if (!e.desc) { toast('Add a description', 'err'); return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(e.date)) { toast('Pick a date', 'err'); return; }
+    if (!e.source || !e.dest) { toast('Pick a source and destination', 'err'); return; }
+    if (!pairOK(e)) { toast('That pair isn’t in the Data tab', 'err'); return; }
+    if (!changed(e)) { toast('Nothing changed'); closeSheet(); return; }
+
+    if (r.pending) {
+      const q = queue.find(x => x.id === r.id);
+      if (!q) { closeSheet(); toast('That entry already reached the sheet. Open it from Activity again to edit the row.', 'err'); renderAll(); return; }
+      if (state.flushing) { toast('It’s being sent right now. Edit it once it reaches the sheet.', 'err'); return; }
+      Object.assign(q, e, { status: 'pending' }); delete q.error;
+      saveQueue(); closeSheet(); toast('Entry updated'); renderAll(); flush(); return;
+    }
+
+    if (!navigator.onLine) { note('Editing a row that’s already in the sheet needs a connection.'); return; }
+    btn.disabled = true; btn.textContent = 'Saving…';
+    try {
+      await api('editRow', { row: r.row, expect: orig, entry: e });
+    } catch (err) {
+      btn.disabled = false; btn.textContent = 'Save changes';
+      if (err.auth) { onError(err); return; }
+      if (err.network) { note(err.message + '. Nothing was changed.'); return; }
+      const stale = /changed in the sheet/i.test(err.message);
+      note(stale ? err.message : `${err.message}. If the sheet doesn’t recognise “editRow”, the script needs edits.gs added (see the repo’s apps-script folder).`);
+      if (stale) sync();
+      return;
+    }
+    // show the edit right away; the next sync re-pulls the row's block because its hash changed
+    const local = rows.find(x => x.row === r.row);
+    if (local) { Object.assign(local, e); store.set(LS.rows, rows); dirty(); }
+    closeSheet(); toast(`Row ${r.row} updated`); renderAll(); sync();
+  };
+  draw(orig.source, orig.dest);
 }
 
 function openSettings(msg) {

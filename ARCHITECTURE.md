@@ -12,7 +12,7 @@ This repository is public and served by GitHub Pages. Keep balances, account num
 | `sw.js` | Service worker. The page is network-first (3-second budget, then the cached copy), so any launch with signal runs the newest version; icons and the manifest are cache-first. Never caches sheet data. |
 | `manifest.webmanifest`, `icons/` | Home-screen install metadata. |
 
-The back end is a Google Apps Script web app (`Code.gs`) bound to the spreadsheet. Apart from `apps-script/allocations.gs`, its source is **not** in this repo; it lives in the sheet's Apps Script project (Extensions → Apps Script). Changing it needs the owner's Google sign-in. Changes to this repo need only a push to `main`; GitHub Pages republishes in about a minute.
+The back end is a Google Apps Script web app (`Code.gs`) bound to the spreadsheet. Apart from `apps-script/allocations.gs` and `apps-script/edits.gs`, its source is **not** in this repo; it lives in the sheet's Apps Script project (Extensions → Apps Script). Changing it needs the owner's Google sign-in. Changes to this repo need only a push to `main`; GitHub Pages republishes in about a minute.
 
 ### Release checklist
 
@@ -65,6 +65,7 @@ All calls are `POST` to the Apps Script `/exec` URL with a `text/plain` JSON bod
 | `add` | `entries`: queued entries with client `id`s, plus `have` | `{ results: [{ id, ok, error }], sync: <same as sync> }` |
 | `getAllocs` | none | the four allocation slots, `[{ name, formula, value }]` |
 | `setAllocs` | `slots`: four arrays of `{ name, amount, on }` | the slots as written, same shape as `getAllocs` |
+| `editRow` | `row`, `expect` (the row as last synced), `entry` (new values) | `{ row }`; the app then syncs to re-pull that row's block |
 
 The log is sent in fixed blocks of rows, each with a hash. The phone sends the hashes it holds; the server returns only rows in blocks whose hash changed, and `applySync` replaces those blocks locally and drops rows past `lastRow`. "Re-download the full log" in Settings clears the hashes to force a full pull.
 
@@ -82,6 +83,17 @@ The connection code the owner pastes is `<exec URL>#<key>`; Settings splits it. 
 | `ledger.prefs` | Last-used pickers, current tab, which cards are open or closed |
 
 Entries are written to the queue first and flushed when online (`flush`). Rejected entries stay in the queue with the server's error and can be edited, retried or deleted. Bulk import parses pasted tab-separated rows (the output of the personal-finance-logger skill), validates them against the Data tab, flags likely duplicates (same source and amount within 7 days) and future dates, and pushes the selected rows into the same queue. The app is the only writer to the Transactions tab.
+
+### Editing a logged row
+
+Tapping a row in Activity and choosing Edit opens an editor with the same Type, Source and Destination pickers as Add, limited to the Data tab's pairs. A value the Data tab no longer lists stays selectable on its own row, marked "(not in the Data tab)", so opening the editor never changes it silently. The editor shows each balance the change moves, computed by reversing the old row and applying the new one.
+
+- **Queued entry:** the entry is changed in the queue and sent on the next flush. It cannot be edited while a flush is in flight.
+- **Sheet row:** needs a connection. The app sends `editRow` with the row as it last synced it. `editRow_` in `apps-script/edits.gs` overwrites columns A–F of that row only if the sheet still holds exactly those values (whitespace-insensitive, amount within ₱0.005) and the row has no formulas; otherwise it refuses with "changed in the sheet since your last sync" and the app syncs. A date cell keeps its kind: a real date stays a date, text stays `MM/DD/YY`. The app patches its local copy at once, and the next sync re-pulls the block because its hash changed.
+
+Deleting rows is not supported, because removing a row shifts every row number below it.
+
+**Deployment:** paste `edits.gs` beside `Code.gs` and add `case 'editRow': return json_({ ok: true, data: editRow_(body.row, body.expect, body.entry) });` to `doPost`'s switch inside the key check, then Deploy → Manage deployments → edit → New version.
 
 ## Ledger math
 
@@ -207,3 +219,4 @@ Per-person receivables are tracked by **description**: for rows whose Source or 
 | 1.8.2 | Hide details leaves only the chart on both Reports cards (quarterly averages and averages line included) |
 | 1.9.0 | Reports line is Net liquidity; pool covers every spendable account and Accounts Payable at exact balances (no flooring), so own-account transfers no longer show as flows; restricted top-ups count as disbursements |
 | 1.10.0 | Desktop dashboard layout, detected on load: three columns, Add as a modal, centred dialogs, keyboard shortcuts; Settings → Layout override |
+| 1.11.0 | Edit any logged row from Activity: queued entries in place, sheet rows through the new `editRow` action (`apps-script/edits.gs`), with a balance-effect preview |
