@@ -8,7 +8,7 @@
  *
  * The app sends the row number, the row as it last saw it (expect) and the new values (entry). The row is only
  * overwritten if the sheet still holds exactly what the app saw, so an edit can never land on a row that moved or
- * changed since the last sync. Source/Destination pairs are validated by the app against the Data tab.
+ * changed since the last sync. New Source/Destination pairs must be in the Data tab (readOptions_ in Code.gs).
  */
 const EDIT_SHEET_ = 'Transactions';
 const EDIT_TYPES_ = ['Outflows', 'Inflow', 'Transfer'];
@@ -56,6 +56,12 @@ function editRow_(row, expect, entry) {
       && editNorm_(cur[3]) === editNorm_(x.source) && editNorm_(cur[4]) === editNorm_(x.dest)
       && Math.abs(Number(cur[5]) - Number(x.amount)) < 0.005;
     if (!same) throw new Error('Row ' + row + ' changed in the sheet since your last sync. Sync, then edit it again.');
+
+    // same Data tab rule as new rows, except that a row may keep the pair it already had
+    const keepsPair = e.type === editNorm_(cur[2]) && editNorm_(e.source) === editNorm_(cur[3]) && editNorm_(e.dest) === editNorm_(cur[4]);
+    const map = readOptions_().map;
+    if (!keepsPair && !(map[e.type] && map[e.type][e.source] && map[e.type][e.source].indexOf(e.dest) !== -1))
+      throw new Error(e.source + ' → ' + e.dest + ' is not a valid pair in the Data tab');
 
     // keep the cell's kind: a real date stays a date, text stays MM/DD/YY text
     const p = e.date.split('-');

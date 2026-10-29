@@ -93,7 +93,7 @@ Tapping a row in Activity and choosing Edit opens an editor with the same Type, 
 
 Deleting rows is not supported, because removing a row shifts every row number below it.
 
-**Deployment:** paste `edits.gs` beside `Code.gs` and add `case 'editRow': return json_({ ok: true, data: editRow_(body.row, body.expect, body.entry) });` to `doPost`'s switch inside the key check, then Deploy → Manage deployments → edit → New version.
+**Deployment (done Oct 29, 2026, script version 3):** `edits.gs` sits beside `Code.gs` as the file `Edits`, and `doPost`'s switch routes `case 'editRow': return json_({ ok: true, data: editRow_(body.row, body.expect, body.entry) });` after `setAllocs`. New pairs are checked against the Data tab with `Code.gs`'s `readOptions_()`. It was pushed through the Apps Script API (clasp's OAuth client, script.projects and script.deployments scopes) and published as a new version of the existing web app deployment, so the `/exec` URL did not change.
 
 ## Ledger math
 
