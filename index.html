@@ -19,6 +19,7 @@
   --chip:#ece9e2; --accent:#1f7a5a; --accent-ink:#ffffff; --accent-soft:#dcefe6;
   --in:#1f8a5c; --neg:#c0463b; --warn:#b7791f; --shadow:0 1px 2px rgba(20,30,25,.06),0 4px 14px rgba(20,30,25,.05);
   --c1:#1f7a5a; --c2:#3f8fc9; --c3:#c98a2e; --c4:#8a63c9; --c5:#c9584a; --c6:#5aa3a0;
+  --g1:#2a78d6; --g2:#eb6834; --g3:#1baf7a; --g4:#eda100; --g5:#e87ba4; --g6:#6250d6; --g7:#e34948; --g8:#a8a69e;
   --safe-t:env(safe-area-inset-top); --safe-b:env(safe-area-inset-bottom);
   --num:ui-rounded,"SF Pro Rounded",-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
 }
@@ -28,6 +29,7 @@
     --chip:#1d2622; --accent:#3fbf8f; --accent-ink:#06130d; --accent-soft:#16352a;
     --in:#4fd39c; --neg:#ef7b70; --warn:#e3a948; --shadow:none;
     --c1:#3fbf8f; --c2:#5ea9e0; --c3:#e0a64c; --c4:#a588e0; --c5:#e07a6c; --c6:#6cc0bc;
+    --g1:#3987e5; --g2:#d95926; --g3:#199e70; --g4:#c98500; --g5:#d55181; --g6:#9085e9; --g7:#e66767; --g8:#6f6e69;
   }
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -198,6 +200,22 @@ details.card[open]>summary{border-bottom:1px solid var(--line)}
 .kvs{display:flex;justify-content:space-between;font-size:14.5px;padding:5px 0}
 .kvs.sub{font-size:13px;color:var(--muted);padding:2px 0 2px 12px}
 .legend span{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--muted)}
+.hatch{background:repeating-linear-gradient(45deg,var(--muted) 0 2px,transparent 2px 4px)!important}
+.cfctl{display:flex;flex-wrap:wrap;gap:6px 10px;margin:8px 0 2px}
+.cfctl .seg2{display:flex;background:var(--chip);border-radius:999px;padding:2px}
+.cfctl .seg2 button{font-size:12.5px;font-weight:500;padding:4px 10px;border-radius:999px;color:var(--muted)}
+.cfctl .seg2 button.on{background:var(--card);color:var(--ink);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.12)}
+#cfWrap{position:relative;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.cftip{position:absolute;z-index:30;width:252px;max-width:calc(100vw - 24px);background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.2);padding:10px 12px;font-size:12.5px;line-height:1.35;pointer-events:none}
+.cftip .r{display:flex;justify-content:space-between;gap:10px;padding:2px 0}
+.cftip .r>span:last-child{font-family:var(--num);font-variant-numeric:tabular-nums;white-space:nowrap}
+.cftip .g{display:flex;align-items:center;gap:6px;min-width:0}
+.cftip .g i{width:8px;height:8px;border-radius:2px;flex:none}
+.cftip .dim{opacity:.45}
+.cftip .sub{padding-left:14px;color:var(--muted)}
+.cftip .hd{margin-top:6px;padding-top:6px;border-top:1px solid var(--line);font-weight:600}
+.cftip .big{color:var(--muted)}
+.cftip .big b{color:var(--ink);font-weight:500}
 
 .bulk{width:100%;min-height:130px;font:13px/1.45 ui-monospace,Menlo,monospace;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);padding:10px;outline:0;resize:vertical}
 .bulk:focus{border-color:var(--accent)}
@@ -347,7 +365,7 @@ html.pc .sheet .grab{display:none}
 
 <script>
 'use strict';
-const VERSION = '1.11.0';
+const VERSION = '1.12.0';
 const TYPES = ['Outflows', 'Inflow', 'Transfer'];
 const TYPE_LABEL = { Outflows: 'Outflow', Inflow: 'Inflow', Transfer: 'Transfer' };
 const LS = { cfg: 'ledger.cfg', rows: 'ledger.rows', blocks: 'ledger.blocks', snap: 'ledger.snap', queue: 'ledger.queue', prefs: 'ledger.prefs', allocs: 'ledger.allocs' };
@@ -980,6 +998,33 @@ function reportData() {
  *  investments or ventures, and moving money into a maintaining balance are disbursements, and the reverse moves are
  *  collections; accruals and transfers inside the pool (card and payable payments, account to account) are zero.
  *  Rows dated after today are left out of both. */
+/* Cash flow disbursement groups. Stack order is fixed (bottom to top) and the colours were checked as adjacent pairs
+ * for colour-blind separation in both themes, so a group keeps its colour whatever else is in a month.
+ * A category name is matched exactly first, then by pattern; anything unmatched is Other. */
+const CF_BIG = 10000; // single rows above this are outliers, drawn hatched or left out of the adjusted chart
+const CF_GROUPS = [
+  { k: 'bills', name: 'Bills', c: 'var(--g1)', cats: ['Electricity Bill', 'Water Bill', 'Subscriptions', 'Laundry', 'Load and Mobile Data'], re: /bill|subscri|laundry|mobile data|internet|utilit/i },
+  { k: 'food', name: 'Food and drinks', c: 'var(--g2)', cats: ['Food and Drinks'], re: /food|drink|dining|restaurant/i },
+  { k: 'groc', name: 'Groceries', c: 'var(--g3)', cats: ['Groceries'], re: /grocer|market/i },
+  { k: 'health', name: 'Health and wellness', c: 'var(--g4)', cats: ['Health/Medicine', 'Wellness', 'Hygiene'], re: /health|medic|wellness|hygiene|hmo|maxicare/i },
+  { k: 'home', name: 'Household and shopping', c: 'var(--g5)', cats: ['Household Items', 'BPI Joint Account', 'Pet Related', 'Electronics', 'Clothing and Accessories', 'Purchases'], re: /household|pet|electronic|cloth|purchase|appliance/i },
+  { k: 'move', name: 'Transport', c: 'var(--g6)', cats: ['Gas and Transportation', 'Vehicle Related', 'Car Maintenance'], re: /gas|transport|vehicle|car |motor|parking|toll/i },
+  { k: 'lend', name: 'Lending, investing and reserves', c: 'var(--g7)', cats: [], re: null },
+  { k: 'other', name: 'Other', c: 'var(--g8)', cats: [], re: null },
+];
+const CF_G = Object.fromEntries(CF_GROUPS.map(g => [g.k, g]));
+const CF_BY_NAME = {}; CF_GROUPS.forEach(g => g.cats.forEach(c => CF_BY_NAME[c.toLowerCase()] = g.k));
+/** kind: 'reserve' for a maintaining-balance move, 'asset' when the money went to an account outside the pool
+ *  (receivables, investments, ventures), otherwise 'spend'. */
+function cfGroupOf(label, kind) {
+  if (kind === 'reserve') return 'lend';
+  const n = String(label).toLowerCase();
+  if (CF_BY_NAME[n]) return CF_BY_NAME[n];
+  if (kind === 'asset') return 'lend';
+  const g = CF_GROUPS.find(x => x.re && x.re.test(label));
+  return g ? g.k : 'other';
+}
+const cfEmpty = () => ({ in: 0, out: 0, srcs: {}, cats: {}, g: {}, gc: {}, gb: {}, big: [], bigSum: 0 });
 let LQ = null;
 const NOT_POOL = new Set(['Lending Receivables', 'Other Receivables', BAD_DEBTS]);
 function liqLedger(start) {
@@ -1008,17 +1053,22 @@ function liqLedger(start) {
     if (r.date > today) { futureDelta += delta; return; }
     if (r.date < start || Math.abs(delta) < 0.005) return;
     add(dayDelta, r.date, delta);
-    const m = r.date.slice(0, 7), f = flow[m] || (flow[m] = { in: 0, out: 0, srcs: {}, cats: {} });
+    const m = r.date.slice(0, 7), f = flow[m] || (flow[m] = cfEmpty());
     const capped = caps[sc] ? sc : caps[d] ? d : null;
-    const label = tracked(d) && !tracked(sc) ? sc : tracked(sc) && !tracked(d) ? d : `${capped || 'Maintaining'} balance`;
-    if (delta > 0) { f.in += delta; add(f.srcs, label, delta); } else { f.out -= delta; add(f.cats, label, -delta); }
+    const one = tracked(d) && !tracked(sc) ? sc : tracked(sc) && !tracked(d) ? d : null;
+    const label = one || `${capped || 'Maintaining'} balance`;
+    if (delta > 0) { f.in += delta; add(f.srcs, label, delta); return; }
+    const amt = -delta; f.out += amt; add(f.cats, label, amt);
+    const g = cfGroupOf(label, one ? (x.accounts.has(one) ? 'asset' : 'spend') : 'reserve');
+    if (amt > CF_BIG) { f.big.push({ cat: label, desc: clean(r.desc), amt, g, date: r.date }); f.bigSum += amt; add(f.gb, g, amt); }
+    else { add(f.g, g, amt); const gc = f.gc[g] || (f.gc[g] = {}); add(gc, label, amt); }
   });
   // today's value less the in-window and future effects gives the value at the window start
   let v = 0; for (const n in run) v += worth(n, run[n]);
   v = r2(v - futureDelta - Object.values(dayDelta).reduce((s2, z) => s2 + z, 0));
   const base = v; const pts = []; const days = Math.round((parseISO(today) - parseISO(start)) / 864e5) + 1;
   for (let k = days - 1; k >= 0; k--) { const day = isoDay(-k); v = r2(v + (dayDelta[day] || 0)); pts.push({ day, v }); }
-  const get = m => flow[m] || { in: 0, out: 0, srcs: {}, cats: {} };
+  const get = m => flow[m] || cfEmpty();
   LQ = { D: x, start, base, pts, get, futureDelta: r2(futureDelta) };
   return LQ;
 }
@@ -1039,22 +1089,108 @@ function quarterAverages(months, get) {
   months.forEach(m => { const k = `Q${Math.floor((+m.slice(5) - 1) / 3) + 1} ${m.slice(0, 4)}`; if (!q[k]) { q[k] = { sum: 0, n: 0, cur: false }; order.push(k); } const f = get(m); q[k].sum += f.in - f.out; q[k].n++; if (m === x_ym()) q[k].cur = true; });
   return order.map(k => ({ label: k + (q[k].cur ? ' (so far)' : ''), avg: q[k].sum / q[k].n }));
 }
-function barSVG(months, get, sel) {
-  const W = 340, H = 170, pb = 20, pt = 14, n = months.length, cw = W / n, bw = Math.min(13, cw * 0.3);
-  const max = Math.max(1, ...months.map(m => Math.max(get(m).in, get(m).out)));
-  const y = v => pt + (H - pt - pb) * (1 - v / max);
-  let s = '';
+const CF_W = 340, CF_H = 170, CF_PB = 20, CF_PT = 14;
+const cfOut = (f, adj) => adj ? f.out - f.bigSum : f.out;
+/** Cash flow bars. opt.view 'all' pairs collections with disbursements; 'out' shows disbursements alone, wider.
+ *  Disbursements stack by group in CF_GROUPS order; rows over CF_BIG sit on top, hatched, unless opt.adj leaves them out. */
+function barSVG(months, get, sel, opt) {
+  const W = CF_W, H = CF_H, pb = CF_PB, pt = CF_PT, n = months.length, cw = W / n;
+  const both = opt.view !== 'out', adj = opt.adj === 'adjusted';
+  const bw = both ? Math.min(13, cw * 0.3) : Math.min(28, cw * 0.56);
+  const max = Math.max(1, ...months.map(m => { const f = get(m); return Math.max(both ? f.in : 0, cfOut(f, adj)); }));
+  const ph = H - pt - pb, hOf = v => ph * v / max, base = H - pb;
+  let s = `<defs><pattern id="cfHatch" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="1.7" height="4" fill="var(--card)"/></pattern></defs>`;
   months.forEach((m, i) => {
     const cx = cw * i + cw / 2, f = get(m);
     const showLbl = n <= 12 || (n - 1 - i) % 2 === 0 || sel === m;
+    const ox = both ? cx + 1 : cx - bw / 2;
+    let stack = '', y0 = base;
+    const seg = (g, v, hatched) => {
+      const h = hOf(v); if (h < 0.3) return; const gap = h > 3 ? 1 : 0; const c = CF_G[g].c;
+      stack += hatched
+        ? `<rect data-g="${g}" data-b="1" x="${ox}" y="${y0 - h}" width="${bw}" height="${h - gap}" rx="1.5" fill="${c}" opacity=".55"/><rect data-g="${g}" data-b="1" x="${ox}" y="${y0 - h}" width="${bw}" height="${h - gap}" rx="1.5" fill="url(#cfHatch)"/>`
+        : `<rect data-g="${g}" x="${ox}" y="${y0 - h}" width="${bw}" height="${h - gap}" rx="1.5" fill="${c}"/>`;
+      y0 -= h;
+    };
+    CF_GROUPS.forEach(g => { if (f.g[g.k]) seg(g.k, f.g[g.k], false); });
+    if (!adj) CF_GROUPS.forEach(g => { if (f.gb[g.k]) seg(g.k, f.gb[g.k], true); });
     s += `<g data-m="${m}" style="cursor:pointer"><rect x="${cw * i + 1}" y="${pt + 2}" width="${cw - 2}" height="${H - pt - 2}" rx="6" fill="${sel === m ? 'var(--chip)' : 'transparent'}"/>
-      <rect x="${cx - bw - 1}" y="${y(f.in)}" width="${bw}" height="${Math.max(0, H - pb - y(f.in))}" rx="2" fill="var(--in)"/>
-      <rect x="${cx + 1}" y="${y(f.out)}" width="${bw}" height="${Math.max(0, H - pb - y(f.out))}" rx="2" fill="var(--c3)"/>
+      ${both ? `<rect data-c="1" x="${cx - bw - 1}" y="${base - hOf(f.in)}" width="${bw}" height="${Math.max(0, hOf(f.in))}" rx="2" fill="var(--in)"/>` : ''}${stack}
       ${showLbl ? `<text x="${cx}" y="${H - 6}" text-anchor="middle" font-size="10" fill="${sel === m ? 'var(--ink)' : 'var(--muted)'}">${monLabel(m)}</text>` : ''}</g>`;
   });
   s += `<line x1="0" x2="${W}" y1="${pt}" y2="${pt}" stroke="var(--line)" stroke-dasharray="3 3" pointer-events="none"/><text x="${W}" y="${pt - 4}" text-anchor="end" font-size="10" fill="var(--faint)" pointer-events="none">${fmtK(max)}</text>`;
-  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;overflow:visible">${s}<line x1="0" x2="${W}" y1="${H - pb}" y2="${H - pb}" stroke="var(--line)"/></svg>`;
+  return `<svg id="cfSvg" viewBox="0 0 ${W} ${H}" width="100%" style="display:block;overflow:visible;touch-action:pan-y">${s}<line x1="0" x2="${W}" y1="${H - pb}" y2="${H - pb}" stroke="var(--line)"/></svg>`;
 }
+/** Groups with spending under the CF_BIG line in a month, largest first. */
+const cfGroupsIn = f => CF_GROUPS.filter(g => f.g[g.k] > 0.004).map(g => [g, f.g[g.k]]).sort((a, b) => b[1] - a[1]);
+const cfBigSorted = f => f.big.slice().sort((a, b) => b.amt - a.amt);
+/** Hover / long-press card for one month. hg is the group under the pointer, which is expanded into its categories. */
+function cfTipHTML(m, f, hg, opt) {
+  const both = opt.view !== 'out', adj = opt.adj === 'adjusted';
+  const sw = g => `<i style="background:${CF_G[g].c}"></i>`;
+  let h = `<div style="font-weight:650;font-size:13.5px;margin-bottom:4px">${esc(monLabel(m, true))}${m === x_ym() ? ' (so far)' : ''}</div>`;
+  if (both) h += `<div class="r"><span class="g"><i style="background:var(--in)"></i>Collections</span><span>${esc(peso(f.in))}</span></div>`;
+  h += `<div class="r"><span>Disbursements</span><span>${esc(peso(f.out))}</span></div>`;
+  if (f.bigSum) h += `<div class="r"><span>Adjusted, without rows over ${esc(fmtK(CF_BIG))}</span><span>${esc(peso(f.out - f.bigSum))}</span></div>`;
+  const gs = cfGroupsIn(f);
+  if (gs.length) h += `<div class="hd">By group</div>`;
+  gs.forEach(([g, v]) => {
+    const on = hg === g.k, dim = hg && !on;
+    h += `<div class="r${dim ? ' dim' : ''}"><span class="g">${sw(g.k)}${on ? `<b>${esc(g.name)}</b>` : esc(g.name)}</span><span>${esc(peso(v))}</span></div>`;
+    if (on) Object.entries(f.gc[g.k] || {}).sort((a, b) => b[1] - a[1]).forEach(([c, a]) => { h += `<div class="r sub"><span>${esc(c)}</span><span>${esc(peso(a))}</span></div>`; });
+  });
+  const big = cfBigSorted(f);
+  if (big.length) {
+    h += `<div class="hd">Over ${esc(fmtK(CF_BIG))}${adj ? ', left out' : ', hatched'}</div>`;
+    big.slice(0, 6).forEach(b => { const dim = hg && hg !== b.g; h += `<div class="r big${dim ? ' dim' : ''}"><span class="g">${sw(b.g)}<span><b>${esc(b.cat)}</b> · ${esc(b.desc || '(no description)')}</span></span><span>${esc(peso(b.amt))}</span></div>`; });
+    if (big.length > 6) h += `<div class="r big"><span>${big.length - 6} more</span><span>${esc(peso(big.slice(6).reduce((a, b) => a + b.amt, 0)))}</span></div>`;
+  }
+  if (!gs.length && !big.length && !both) h += `<div class="muted">No disbursements.</div>`;
+  return h;
+}
+/** Hover with a mouse or pen; long-press (and slide) with a finger. A long-press keeps the card up after lifting and
+ *  swallows the tap, so it doesn't also select the month; the next touch elsewhere closes it. */
+function wireCF(months, get, opt) {
+  const wrap = $('#cfWrap'), svg = $('#cfSvg'); if (!wrap || !svg) return;
+  let tip = null, timer = null, held = false, sx = 0, sy = 0;
+  const hide = () => { if (tip) { tip.remove(); tip = null; } };
+  const show = (cx, cy, target, touch) => {
+    const r = svg.getBoundingClientRect(); if (!r.width) return;
+    const i = Math.max(0, Math.min(months.length - 1, Math.floor((cx - r.left) / r.width * months.length)));
+    const m = months[i], seg = target && target.closest && target.closest('[data-g]');
+    if (!tip) { tip = document.createElement('div'); tip.className = 'cftip'; wrap.appendChild(tip); }
+    tip.innerHTML = cfTipHTML(m, get(m), seg ? seg.dataset.g : null, opt);
+    const wr = wrap.getBoundingClientRect(), tw = tip.offsetWidth, th = tip.offsetHeight;
+    const colX = r.left - wr.left + (i + 0.5) * r.width / months.length;
+    let left, top;
+    if (touch) {
+      left = Math.max(-4, Math.min(wr.width - tw + 4, colX - tw / 2));
+      top = wr.top - th - 10 > 8 ? -th - 10 : wr.height + 10; // above the chart, below it if there's no room
+    } else {
+      const px = cx - wr.left; left = px + 16 + tw > wr.width + 8 ? px - tw - 16 : px + 16;
+      top = Math.max(-th + 40, Math.min(cy - wr.top - 20, wr.height - 30));
+      if (wr.top + top < 8) top = 8 - wr.top;
+    }
+    tip.style.left = left + 'px'; tip.style.top = top + 'px';
+  };
+  svg.addEventListener('pointermove', e => { if (e.pointerType !== 'touch') show(e.clientX, e.clientY, e.target, false); });
+  svg.addEventListener('pointerleave', e => { if (e.pointerType !== 'touch') hide(); });
+  svg.addEventListener('touchstart', e => {
+    const t = e.touches[0]; sx = t.clientX; sy = t.clientY; held = false; clearTimeout(timer); hide();
+    timer = setTimeout(() => { held = true; show(sx, sy, document.elementFromPoint(sx, sy), true); }, 420);
+  }, { passive: true });
+  svg.addEventListener('touchmove', e => {
+    const t = e.touches[0];
+    if (!held) { if (Math.hypot(t.clientX - sx, t.clientY - sy) > 10) clearTimeout(timer); return; }
+    e.preventDefault(); show(t.clientX, t.clientY, document.elementFromPoint(t.clientX, t.clientY), true);
+  }, { passive: false });
+  svg.addEventListener('touchend', e => { clearTimeout(timer); if (held) { e.preventDefault(); held = false; } });
+  svg.addEventListener('touchcancel', () => { clearTimeout(timer); held = false; });
+  svg.addEventListener('contextmenu', e => e.preventDefault());
+  state.cfHide = hide;
+}
+document.addEventListener('touchstart', e => { if (state.cfHide && !e.target.closest('#cfSvg')) state.cfHide(); }, { passive: true });
+window.addEventListener('scroll', () => state.cfHide && state.cfHide(), { passive: true, capture: true });
 function lineSVG(pts) {
   const W = 340, H = 150, pt = 10, pb = 18;
   const vs = pts.map(p => p.v); let mn = Math.min(...vs), mx = Math.max(...vs); if (mx - mn < 1) { mx += 1; mn -= 1; }
@@ -1101,18 +1237,32 @@ function renderReports() {
   const closeV = at(sel === x_ym() ? isoDay(0) : monthEnd(sel));
 
   // 1. Cash flow
-  html += `<div class="card pad"><div style="display:flex;justify-content:space-between;align-items:baseline"><b>Cash flow</b>
-      <span class="legend" style="gap:10px"><span><i style="background:var(--in)"></i> Collections</span><span><i style="background:var(--c3)"></i> Disbursements</span></span></div>
-    ${shown('cf') ? `<div class="muted" style="font-size:13px;margin:2px 0 12px">Average per month: collections ${esc(peso(colIn / n, { round: true }))}, disbursements ${esc(peso(colOut / n, { round: true }))}, net ${esc(peso((colIn - colOut) / n, { round: true, plus: true }))}</div>` : '<div style="height:10px"></div>'}
-    <div id="cfChart">${barSVG(months, cf, sel)}</div>
+  const cfo = { view: prefs.cfView === 'out' ? 'out' : 'all', adj: prefs.cfAdj === 'adjusted' ? 'adjusted' : 'overlay' };
+  const both = cfo.view === 'all', adjOn = cfo.adj === 'adjusted';
+  const bigN = months.reduce((a, m) => a + cf(m).big.length, 0), bigOut = months.reduce((a, m) => a + cf(m).bigSum, 0);
+  const usedG = CF_GROUPS.filter(g => months.some(m => cf(m).g[g.k] > 0.004 || (!adjOn && cf(m).gb[g.k] > 0.004)));
+  const segBtn = (attr, v, cur, lbl) => `<button data-${attr}="${v}" class="${v === cur ? 'on' : ''}">${lbl}</button>`;
+  const avgLine = both
+    ? `Average per month: collections ${esc(peso(colIn / n, { round: true }))}, disbursements ${esc(peso(colOut / n, { round: true }))}, net ${esc(peso((colIn - colOut) / n, { round: true, plus: true }))}.`
+    : `Average disbursements per month: ${esc(peso(colOut / n, { round: true }))}.`;
+  const adjLine = bigN ? ` Without the ${bigN} ${bigN === 1 ? 'row' : 'rows'} over ${esc(fmtK(CF_BIG))}, disbursements average ${esc(peso((colOut - bigOut) / n, { round: true }))}.` : ` No single row over ${esc(fmtK(CF_BIG))} in this window.`;
+  const bigSel = cfBigSorted(f);
+  html += `<div class="card pad"><b>Cash flow</b>
+    <div class="cfctl"><span class="seg2">${segBtn('cfv', 'all', cfo.view, 'All flows')}${segBtn('cfv', 'out', cfo.view, 'Outflows only')}</span>
+      <span class="seg2">${segBtn('cfa', 'overlay', cfo.adj, 'Overlay over ' + fmtK(CF_BIG))}${segBtn('cfa', 'adjusted', cfo.adj, 'Adjusted only')}</span></div>
+    ${shown('cf') ? `<div class="muted" style="font-size:13px;margin:4px 0 12px">${avgLine}${adjLine}</div>` : '<div style="height:10px"></div>'}
+    <div id="cfWrap">${barSVG(months, cf, sel, cfo)}</div>
+    <div class="legend" style="margin-top:8px;gap:5px 12px">${both ? '<span><i style="background:var(--in)"></i>Collections</span>' : ''}${usedG.map(g => `<span><i style="background:${g.c}"></i>${esc(g.name)}</span>`).join('')}${!adjOn && bigN ? `<span><i class="hatch"></i>Single rows over ${esc(fmtK(CF_BIG))}</span>` : ''}</div>
     ${shown('cf') ? `<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px">
-      <div style="display:flex;justify-content:space-between"><b>${esc(monLabel(sel, true))}${sel === x_ym() ? ' (so far)' : ''}</b><span class="num ${f.in - f.out < 0 ? 'v neg' : 'v in'}">${esc(peso(f.in - f.out, { plus: true }))} net</span></div>
-      <div class="kvs"><span>Collections</span><span class="num">${esc(peso(f.in))}</span></div>
-      ${top(f.srcs, 4).map(([k, v]) => `<div class="kvs sub"><span>${esc(k)}</span><span class="num">${esc(peso(v))}</span></div>`).join('')}
+      <div style="display:flex;justify-content:space-between"><b>${esc(monLabel(sel, true))}${sel === x_ym() ? ' (so far)' : ''}</b>${both ? `<span class="num ${f.in - f.out < 0 ? 'v neg' : 'v in'}">${esc(peso(f.in - f.out, { plus: true }))} net</span>` : ''}</div>
+      ${both ? `<div class="kvs"><span>Collections</span><span class="num">${esc(peso(f.in))}</span></div>
+      ${top(f.srcs, 4).map(([k, v]) => `<div class="kvs sub"><span>${esc(k)}</span><span class="num">${esc(peso(v))}</span></div>`).join('')}` : ''}
       <div class="kvs"><span>Disbursements</span><span class="num">${esc(peso(-f.out))}</span></div>
-      ${top(f.cats, 5).map(([k, v]) => `<div class="kvs sub"><span>${esc(k)}</span><span class="num">${esc(peso(-v))}</span></div>`).join('')}
-      ${openV != null && closeV != null ? `<div class="kvs" style="margin-top:6px"><span class="muted">Net liquidity</span><span class="num muted">${esc(peso(openV))} → ${esc(peso(closeV))}</span></div>` : ''}
-      <div class="faint" style="font-size:12px;margin-top:6px">Tap a month to see it. Collections and disbursements move Net liquidity. Spending counts when made, whether from an account, a card or a payable; lending out, investing and topping up a maintaining balance are disbursements, and their reverse are collections. Card and payable payments, transfers between your accounts and accrued income don't count.</div></div>` : ''}
+      ${cfGroupsIn(f).map(([g, v]) => `<div class="kvs sub"><span style="display:inline-flex;align-items:center;gap:6px"><i style="width:8px;height:8px;border-radius:2px;background:${g.c}"></i>${esc(g.name)}</span><span class="num">${esc(peso(-v))}</span></div>`).join('')}
+      ${bigSel.length ? `<div class="kvs sub"><span>Single rows over ${esc(fmtK(CF_BIG))}${adjOn ? ' (left out of the chart)' : ''}</span><span class="num">${esc(peso(-f.bigSum))}</span></div>
+      ${bigSel.map(b => `<div class="kvs sub" style="padding-left:24px"><span>${esc(b.cat)} · ${esc(b.desc || '(no description)')}</span><span class="num">${esc(peso(-b.amt))}</span></div>`).join('')}` : ''}
+      ${both && openV != null && closeV != null ? `<div class="kvs" style="margin-top:6px"><span class="muted">Net liquidity</span><span class="num muted">${esc(peso(openV))} → ${esc(peso(closeV))}</span></div>` : ''}
+      <div class="faint" style="font-size:12px;margin-top:6px">Tap a month to see it here. Hover a bar, or long-press it on a phone, for its groups and its rows over ${esc(fmtK(CF_BIG))}; point at a colour to list its categories. Collections and disbursements move Net liquidity. Spending counts when made, whether from an account, a card or a payable; lending out, investing and topping up a maintaining balance are disbursements, and their reverse are collections. Card and payable payments, transfers between your accounts and accrued income don't count. Adjusted leaves out any single row over ${esc(fmtK(CF_BIG))}.</div></div>` : ''}
       ${detBtn('cf')}</div>`;
 
   // 2. Liquidity trend: the bars above, accumulated
@@ -1151,8 +1301,9 @@ function renderReports() {
     <div class="legend">${comp.map((c, i) => `<button data-hl="${esc(c.label)}" class="${hl === c.label ? 'on' : ''}"><i style="background:${colors[i % 6]}"></i>${esc(c.label.replace(' Net of AP', ''))} ${esc(c.pct || '')}</button>`).join('')}</div>
     ${hi ? `<div style="margin-top:10px;font-size:14px"><b>${esc(hi.label)}</b>: <span class="num">${esc(peso(hi.value))}</span> <span class="muted">(${esc(hi.pct || '')})</span></div>` : ''}</div>`;
 
+  if (state.cfHide) state.cfHide();
   el.innerHTML = html;
-  wireLine();
+  wireLine(); wireCF(months, cf, cfo);
 }
 const x_ym = () => isoDay(0).slice(0, 7);
 const isoDayOf = (d, off) => { const z = new Date(d); z.setDate(z.getDate() + off); return `${z.getFullYear()}-${String(z.getMonth() + 1).padStart(2, '0')}-${String(z.getDate()).padStart(2, '0')}`; };
@@ -1632,6 +1783,8 @@ $('#v-bal').addEventListener('toggle', e => {
 $('#v-rep').addEventListener('click', e => {
   const rn = e.target.closest('[data-rn]'); if (rn) { state.repN = +rn.dataset.rn; renderReports(); return; }
   const dt = e.target.closest('[data-det]'); if (dt) { const k = 'rep.' + dt.dataset.det; if (prefs.closed[k]) delete prefs.closed[k]; else prefs.closed[k] = 1; savePrefs(); renderReports(); return; }
+  const cv = e.target.closest('[data-cfv]'); if (cv) { prefs.cfView = cv.dataset.cfv; savePrefs(); renderReports(); return; }
+  const ca = e.target.closest('[data-cfa]'); if (ca) { prefs.cfAdj = ca.dataset.cfa; savePrefs(); renderReports(); return; }
   const m = e.target.closest('[data-m]'); if (m) { state.repSel = m.dataset.m; renderReports(); return; }
   const hl = e.target.closest('[data-hl]'); if (hl) { state.highlight = state.highlight === hl.dataset.hl ? null : hl.dataset.hl; renderReports(); }
 });

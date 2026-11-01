@@ -158,6 +158,13 @@ These are the owner's rules, settled Oct 27, 2026. The Cash flow bars show what 
 - The line card heads with the average monthly net effect for each calendar quarter in the window (months shown only; the current quarter "so far").
 - Spans are 3, 6, 12 or 18 months, chosen from the top row or from the line card's chips; both cards always share the span. "Hide details" leaves only the chart on either card.
 
+#### Cash flow views, groups and outliers (v1.12.0)
+
+- **View** (`prefs.cfView`): *All flows* pairs the collections bar with the disbursements bar; *Outflows only* drops collections and widens the disbursement bars. Both views use the same `liqLedger` disbursements, so lending out, investing and maintaining-balance top-ups are included.
+- **Groups**: each disbursement is placed in one of `CF_GROUPS` by `cfGroupOf(label, kind)`. Exact category names come first (Bills = Electricity Bill, Water Bill, Subscriptions, Laundry, Load and Mobile Data; Food and drinks; Groceries, kept separate from food on the owner's instruction; Health and wellness; Household and shopping, which includes BPI Joint Account and Pet Related; Transport), then a pattern per group for new category names, then Other. A disbursement to an account outside the pool (receivables, investments, ventures) or into a maintaining balance goes to Lending, investing and reserves. The stack order is fixed bottom to top in `CF_GROUPS` order, and the colours (`--g1` to `--g8`) were checked as adjacent pairs for colour-blind separation in both themes, so reordering the groups needs that check redone.
+- **Outliers** (`CF_BIG` = ₱10,000): any single row whose disbursement effect is more than ₱10,000 is kept apart in `f.big` and `f.gb` instead of `f.g`. *Overlay* (`prefs.cfAdj = 'overlay'`) draws those rows on top of the stack, hatched in their group's colour; *Adjusted only* leaves them out and rescales the chart. The card's average line gives both averages.
+- **Hover**: a mouse or pen hovering a month shows a card with collections, disbursements, the adjusted figure, each group's amount and every row over ₱10k as category · description · amount; pointing at one colour lists that group's categories. On touch the same card opens on a long-press (420 ms), follows the finger while held, stays up after lifting and swallows that tap; a plain tap still selects the month, and the next touch elsewhere or any scroll closes it. `wireCF` holds this logic.
+
 Spending by category and Inflows by source still use `reportData` (Outflows into non-accounts, and income by source) and are not liquidity measures.
 
 ### Cash allocations
@@ -220,3 +227,4 @@ Per-person receivables are tracked by **description**: for rows whose Source or 
 | 1.9.0 | Reports line is Net liquidity; pool covers every spendable account and Accounts Payable at exact balances (no flooring), so own-account transfers no longer show as flows; restricted top-ups count as disbursements |
 | 1.10.0 | Desktop dashboard layout, detected on load: three columns, Add as a modal, centred dialogs, keyboard shortcuts; Settings → Layout override |
 | 1.11.0 | Edit any logged row from Activity: queued entries in place, sheet rows through the new `editRow` action (`apps-script/edits.gs`), with a balance-effect preview |
+| 1.12.0 | Cash flow: Outflows-only view, disbursements stacked by spending group, rows over ₱10k hatched (overlay) or left out (adjusted), hover card with groups, categories and outliers; long-press on touch |
