@@ -1,0 +1,1901 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Ledger">
+<meta name="theme-color" content="#0d1210">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" href="icons/icon-192.png">
+<title>Ledger</title>
+<style>
+:root{
+  --bg:#f4f2ee; --card:#ffffff; --ink:#17201c; --muted:#6b746f; --faint:#9aa29d; --line:#e4e1da;
+  --chip:#ece9e2; --accent:#1f7a5a; --accent-ink:#ffffff; --accent-soft:#dcefe6;
+  --in:#1f8a5c; --neg:#c0463b; --warn:#b7791f; --shadow:0 1px 2px rgba(20,30,25,.06),0 4px 14px rgba(20,30,25,.05);
+  --c1:#1f7a5a; --c2:#3f8fc9; --c3:#c98a2e; --c4:#8a63c9; --c5:#c9584a; --c6:#5aa3a0;
+  --g1:#2a78d6; --g2:#eb6834; --g3:#1baf7a; --g4:#eda100; --g5:#e87ba4; --g6:#6250d6; --g7:#e34948; --g8:#a8a69e;
+  --safe-t:env(safe-area-inset-top); --safe-b:env(safe-area-inset-bottom);
+  --num:ui-rounded,"SF Pro Rounded",-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0d1210; --card:#151c19; --ink:#e8ece9; --muted:#8b958f; --faint:#5f6964; --line:#232c28;
+    --chip:#1d2622; --accent:#3fbf8f; --accent-ink:#06130d; --accent-soft:#16352a;
+    --in:#4fd39c; --neg:#ef7b70; --warn:#e3a948; --shadow:none;
+    --c1:#3fbf8f; --c2:#5ea9e0; --c3:#e0a64c; --c4:#a588e0; --c5:#e07a6c; --c6:#6cc0bc;
+    --g1:#3987e5; --g2:#d95926; --g3:#199e70; --g4:#c98500; --g5:#d55181; --g6:#9085e9; --g7:#e66767; --g8:#6f6e69;
+  }
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--ink);font:16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;overscroll-behavior-y:none}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+input,select,textarea{font:inherit;color:inherit}
+.num{font-family:var(--num);font-variant-numeric:tabular-nums}
+
+/* header */
+header{position:fixed;inset:0 0 auto 0;z-index:20;padding:calc(var(--safe-t) + 10px) 16px 10px;
+  background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:saturate(1.4) blur(14px);-webkit-backdrop-filter:saturate(1.4) blur(14px);
+  display:flex;align-items:center;gap:10px;border-bottom:1px solid transparent}
+header.scrolled{border-bottom-color:var(--line)}
+header h1{font-size:22px;font-weight:700;letter-spacing:-.01em;margin:0;flex:1}
+.pill{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);background:var(--chip);border-radius:999px;padding:6px 11px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--faint)}
+.dot.ok{background:var(--in)} .dot.warn{background:var(--warn)} .dot.err{background:var(--neg)}
+.dot.spin{background:var(--accent);animation:pulse 1s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.25}}
+.iconbtn{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:var(--chip);color:var(--muted)}
+.iconbtn svg{width:18px;height:18px}
+
+main{padding:calc(var(--safe-t) + 64px) 16px calc(var(--safe-b) + 92px);max-width:560px;margin:0 auto}
+.view{display:none} .view.on{display:block}
+
+/* tab bar */
+nav{position:fixed;inset:auto 0 0 0;z-index:20;display:flex;justify-content:space-around;
+  padding:8px 6px calc(var(--safe-b) + 6px);background:color-mix(in srgb,var(--card) 92%,transparent);
+  backdrop-filter:saturate(1.4) blur(14px);-webkit-backdrop-filter:saturate(1.4) blur(14px);border-top:1px solid var(--line)}
+nav button{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;font-weight:500;color:var(--faint);padding:4px 0}
+nav button svg{width:24px;height:24px}
+nav button.on{color:var(--accent)}
+.badge{position:absolute;margin-left:22px;margin-top:-4px;min-width:16px;height:16px;border-radius:8px;background:var(--warn);color:#fff;font-size:10px;font-weight:700;display:grid;place-items:center;padding:0 4px}
+
+/* cards & generic */
+.card{background:var(--card);border-radius:16px;box-shadow:var(--shadow);border:1px solid var(--line);margin-bottom:12px}
+.pad{padding:16px}
+.label{font-size:13px;color:var(--muted);font-weight:500}
+.muted{color:var(--muted)} .faint{color:var(--faint)}
+.empty{text-align:center;color:var(--muted);padding:48px 16px;font-size:15px}
+.banner{border-radius:12px;padding:12px 14px;font-size:14px;margin-bottom:12px;background:color-mix(in srgb,var(--neg) 14%,var(--card));color:var(--ink);border:1px solid color-mix(in srgb,var(--neg) 35%,transparent)}
+.banner.warn{background:color-mix(in srgb,var(--warn) 14%,var(--card));border-color:color-mix(in srgb,var(--warn) 35%,transparent)}
+
+/* add form */
+.amount{display:flex;align-items:baseline;gap:6px;padding:18px 16px 14px}
+.amount span{font-family:var(--num);font-size:30px;color:var(--faint);font-weight:600}
+.amount input{flex:1;min-width:0;border:0;outline:0;background:transparent;font-family:var(--num);font-size:44px;font-weight:650;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.amount input::placeholder{color:var(--faint)}
+.seg{display:flex;background:var(--chip);border-radius:12px;padding:3px;margin:0 16px 14px}
+.seg button{flex:1;padding:9px 0;border-radius:9px;font-size:15px;font-weight:600;color:var(--muted)}
+.seg button.on{background:var(--card);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.field{border-top:1px solid var(--line);padding:12px 16px}
+.field>.label{display:block;margin-bottom:6px}
+.field input[type=text],.field input[type=date],.field select{width:100%;border:0;outline:0;background:transparent;font-size:17px;padding:4px 0}
+.field select{-webkit-appearance:none;appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--faint) 50%),linear-gradient(135deg,var(--faint) 50%,transparent 50%);
+  background-position:calc(100% - 12px) 55%,calc(100% - 7px) 55%;background-size:5px 5px;background-repeat:no-repeat;padding-right:24px}
+.field input[type=date]{min-height:28px}
+.chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:2px -16px 6px;padding:0 16px}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;font-size:13px;font-weight:500;padding:6px 11px;border-radius:999px;background:var(--chip);color:var(--muted);white-space:nowrap}
+.chip.on{background:var(--accent-soft);color:var(--accent)}
+.daterow{display:flex;align-items:center;gap:8px}
+.daterow input{flex:1}
+.sugg{margin:6px -16px -12px;border-top:1px solid var(--line)}
+.sugg button{display:block;width:100%;text-align:left;padding:10px 16px;border-bottom:1px solid var(--line)}
+.sugg button:last-child{border-bottom:0}
+.sugg b{font-weight:600;display:block;font-size:15px}
+.sugg small{color:var(--muted);font-size:12.5px}
+.primary{display:block;width:100%;padding:15px;border-radius:14px;background:var(--accent);color:var(--accent-ink);font-size:17px;font-weight:650}
+.primary:disabled{opacity:.45}
+.secondary{display:block;width:100%;padding:13px;border-radius:14px;background:var(--chip);font-size:16px;font-weight:600}
+.hint{font-size:13px;color:var(--muted);text-align:center;margin:10px 0 18px}
+.qitem{display:flex;gap:10px;align-items:flex-start;padding:12px 16px;border-top:1px solid var(--line)}
+.qitem:first-child{border-top:0}
+.qitem .grow{flex:1;min-width:0}
+.qitem .err{color:var(--neg);font-size:13px;margin-top:2px}
+.qitem .acts{display:flex;gap:6px;margin-top:8px}
+.qitem .acts button{font-size:13px;font-weight:600;padding:5px 10px;border-radius:8px;background:var(--chip)}
+
+/* lists */
+.row{display:flex;align-items:center;gap:12px;padding:11px 16px;border-top:1px solid var(--line);width:100%;text-align:left}
+.row:first-child{border-top:0}
+.row .grow{flex:1;min-width:0}
+.row .t{font-size:15.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .s{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .v{font-family:var(--num);font-variant-numeric:tabular-nums;font-weight:600;font-size:15.5px;white-space:nowrap;text-align:right}
+.v.in{color:var(--in)} .v.neg{color:var(--neg)} .v.tr{color:var(--muted)}
+.stale{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--warn);margin-right:5px;vertical-align:1px}
+.pending{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--warn);margin-right:6px}
+.dayhead{display:flex;justify-content:space-between;font-size:13px;font-weight:600;color:var(--muted);padding:18px 4px 6px}
+.search{display:flex;align-items:center;gap:8px;background:var(--chip);border-radius:12px;padding:9px 12px;margin-bottom:10px}
+.search svg{width:17px;height:17px;color:var(--faint);flex:none}
+.search input{flex:1;border:0;outline:0;background:transparent;font-size:16px;min-width:0}
+details.card>summary{list-style:none;display:flex;align-items:center;gap:10px;padding:14px 16px;cursor:pointer}
+details.card>summary::-webkit-details-marker{display:none}
+details.card>summary .grow{flex:1;font-weight:650;font-size:16px}
+details.card>summary .chev{width:14px;height:14px;color:var(--faint);transition:transform .2s}
+details.card[open]>summary .chev{transform:rotate(90deg)}
+details.card[open]>summary{border-bottom:1px solid var(--line)}
+
+/* balances */
+.hero{padding:18px 16px 16px}
+.hero .big.neg{color:var(--neg)}
+.hero .big{font-family:var(--num);font-size:36px;font-weight:700;letter-spacing:-.02em;margin:2px 0 14px;font-variant-numeric:tabular-nums}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px}
+.stats .v{font-family:var(--num);font-weight:650;font-size:17px;font-variant-numeric:tabular-nums}
+.stack{display:flex;height:10px;border-radius:5px;overflow:hidden;margin:16px 0 10px;gap:2px}
+.stack button{height:100%;padding:0;border-radius:2px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12.5px;color:var(--muted)}
+.legend button{display:flex;align-items:center;gap:5px;font-size:12.5px}
+.legend i{width:8px;height:8px;border-radius:2px;display:inline-block}
+.legend button.on{color:var(--ink);font-weight:600}
+.bar{height:6px;border-radius:3px;background:var(--chip);overflow:hidden;margin-top:6px}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:3px}
+.sectiontitle{font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:22px 4px 8px}
+
+/* sheet + toast */
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:40;opacity:0;pointer-events:none;transition:opacity .2s}
+.scrim.on{opacity:1;pointer-events:auto}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:41;background:var(--card);border-radius:20px 20px 0 0;max-height:90vh;overflow:auto;
+  padding:8px 16px calc(var(--safe-b) + 20px);transform:translateY(105%);visibility:hidden;transition:transform .25s cubic-bezier(.2,.8,.2,1),visibility 0s linear .25s;max-width:560px;margin:0 auto}
+.sheet.on{transform:none;visibility:visible;transition:transform .25s cubic-bezier(.2,.8,.2,1)}
+.grab{width:38px;height:5px;border-radius:3px;background:var(--line);margin:4px auto 14px}
+.sheet h2{font-size:20px;margin:0 0 4px}
+.sheet .kv{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line);font-size:15px}
+.sheet .kv span:first-child{color:var(--muted)}
+.sheet .kv span:last-child{text-align:right}
+.sheet .btns{display:grid;gap:8px;margin-top:16px}
+.sheet label{display:block;margin:12px 0 6px}
+.sheet input.txt{width:100%;padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);font-size:16px;outline:0}
+.sheet input.txt:focus{border-color:var(--accent)}
+.sheet select.txt{width:100%;padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);font-size:16px;outline:0;-webkit-appearance:none;appearance:none}
+.sheet select.txt:focus{border-color:var(--accent)}
+.sheet .seg{margin:0}
+.sheet .efx{font-size:13.5px;color:var(--muted);margin-top:14px;line-height:1.5}
+.sheet .efx b{color:var(--ink);font-weight:600}
+.sheet p{font-size:14.5px;color:var(--muted);margin:6px 0}
+.toast{position:fixed;left:50%;top:calc(var(--safe-t) + 62px);transform:translate(-50%,-12px);z-index:50;background:var(--ink);color:var(--bg);
+  padding:10px 16px;border-radius:12px;font-size:14.5px;font-weight:500;opacity:0;pointer-events:none;transition:all .25s;max-width:88vw;text-align:center}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+.toast.err{background:var(--neg);color:#fff}
+.recon{display:flex;align-items:center;gap:8px;font-size:13.5px;color:var(--muted);padding:2px 4px 12px}
+.recon i{width:8px;height:8px;border-radius:50%;background:var(--in);flex:none}
+.recon.bad i{background:var(--warn)}
+.diffrow{padding:10px 16px;border-top:1px solid var(--line);font-size:14px}
+.diffrow b{font-weight:600}
+.flag{color:var(--warn);font-weight:600}
+.bs{overflow:hidden}
+.bshead{font-size:12.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:14px 16px 6px}
+.bsg>summary{list-style:none;display:flex;align-items:center;gap:10px;padding:12px 16px;border-top:1px solid var(--line);cursor:pointer}
+.bsg>summary::-webkit-details-marker{display:none}
+.bsg>summary .grow{flex:1;font-size:15.5px;font-weight:550}
+.bsg>summary .num{font-weight:600;font-variant-numeric:tabular-nums}
+.bsg>summary .num.neg{color:var(--neg)}
+.bsg>summary .chev{width:13px;height:13px;color:var(--faint);transition:transform .2s}
+.bsg[open]>summary .chev{transform:rotate(90deg)}
+.bsg .bsi{padding-left:30px;background:color-mix(in srgb,var(--chip) 35%,transparent)}
+.bsg .bsi .t{font-size:14.5px;font-weight:450}
+.bsg .bsi .v{font-size:14.5px;font-weight:500}
+.bstotal{display:flex;justify-content:space-between;gap:10px;padding:13px 16px;border-top:1.5px solid var(--ink);font-weight:700;font-size:16px}
+.bstotal .num{font-variant-numeric:tabular-nums}
+.bstotal.net{border-top:0;font-size:18px}
+.bstotal.net .num{border-bottom:3px double var(--ink);padding-bottom:1px}
+.bsnote{font-size:12.5px;color:var(--muted);padding:6px 16px 6px 30px}
+.kvs{display:flex;justify-content:space-between;font-size:14.5px;padding:5px 0}
+.kvs.sub{font-size:13px;color:var(--muted);padding:2px 0 2px 12px}
+.legend span{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--muted)}
+.hatch{background:repeating-linear-gradient(45deg,var(--muted) 0 2px,transparent 2px 4px)!important}
+.cfctl{display:flex;flex-wrap:wrap;gap:6px 10px;margin:8px 0 2px}
+.cfctl .seg2{display:flex;background:var(--chip);border-radius:999px;padding:2px}
+.cfctl .seg2 button{font-size:12.5px;font-weight:500;padding:4px 10px;border-radius:999px;color:var(--muted)}
+.cfctl .seg2 button.on{background:var(--card);color:var(--ink);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.12)}
+#cfWrap{position:relative;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.cftip{position:absolute;z-index:30;width:252px;max-width:calc(100vw - 24px);background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.2);padding:10px 12px;font-size:12.5px;line-height:1.35;pointer-events:none}
+.cftip .r{display:flex;justify-content:space-between;gap:10px;padding:2px 0}
+.cftip .r>span:last-child{font-family:var(--num);font-variant-numeric:tabular-nums;white-space:nowrap}
+.cftip .g{display:flex;align-items:center;gap:6px;min-width:0}
+.cftip .g i{width:8px;height:8px;border-radius:2px;flex:none}
+.cftip .dim{opacity:.45}
+.cftip .sub{padding-left:14px;color:var(--muted)}
+.cftip .hd{margin-top:6px;padding-top:6px;border-top:1px solid var(--line);font-weight:600}
+.cftip .big{color:var(--muted)}
+.cftip .big b{color:var(--ink);font-weight:500}
+
+.bulk{width:100%;min-height:130px;font:13px/1.45 ui-monospace,Menlo,monospace;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);padding:10px;outline:0;resize:vertical}
+.bulk:focus{border-color:var(--accent)}
+.brow,.sheet label.brow{display:flex;gap:10px;align-items:flex-start;padding:10px 0;margin:0;border-bottom:1px solid var(--line)}
+.brow input{width:20px;height:20px;margin:2px 0 0;accent-color:var(--accent);flex:none}
+.brow .grow{flex:1;min-width:0}
+.brow .t{font-size:15px;font-weight:500}
+.brow .s{font-size:12.5px;color:var(--muted)}
+.brow .bad{color:var(--neg);font-size:12.5px}
+.brow .warn{color:var(--warn);font-size:12.5px}
+.bsum{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:12px 0 4px;font-size:14px}
+
+/* ---------- desktop dashboard (html.pc) ----------
+   Chosen on load by applyLayout(): a fine pointer with hover and a window at least 1,000px wide,
+   unless Settings → Layout forces Phone or Desktop. All views show at once; Add becomes a modal. */
+html:not(.pc) .pconly{display:none!important}
+html.pc .phoneonly{display:none!important}
+.hbtn{display:flex;align-items:center;gap:7px;height:34px;padding:0 14px;border-radius:999px;font-size:14px;font-weight:600;background:var(--chip);color:var(--ink);white-space:nowrap}
+.hbtn.acc{background:var(--accent);color:var(--accent-ink)}
+.hbtn svg{width:16px;height:16px}
+.kbd{font:600 11px/1 ui-monospace,Menlo,monospace;padding:3px 5px;border-radius:5px;border:1px solid color-mix(in srgb,currentColor 35%,transparent);opacity:.8}
+.savebar{display:block}
+html.pc .savebar{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.addhead{display:flex;align-items:center;gap:10px;margin:2px 2px 14px}
+.addhead h2{flex:1;margin:0;font-size:20px}
+
+html.pc body{overflow:hidden}
+html.pc header{padding:10px 20px;background:var(--bg);border-bottom-color:var(--line)}
+html.pc header h1{font-size:20px}
+html.pc nav{display:none}
+html.pc main{max-width:1720px;height:100vh;height:100dvh;padding:72px 20px 0;display:grid;
+  grid-template-columns:minmax(330px,1fr) minmax(400px,1.2fr) minmax(360px,1fr);grid-template-rows:minmax(0,1fr);gap:20px}
+html.pc .view{display:block;min-height:0;overflow-y:auto;overflow-x:hidden;padding:0 2px 28px;scrollbar-width:thin;border-radius:12px}
+html.pc #v-bal{grid-column:1;grid-row:1}
+html.pc #v-rep{grid-column:2;grid-row:1}
+html.pc #v-act{grid-column:3;grid-row:1}
+html.pc #v-bal::before,html.pc #v-rep::before,html.pc #v-act::before{content:attr(data-head);display:block;position:sticky;top:0;z-index:3;height:36px;
+  padding:4px 4px 0;background:var(--bg);font-size:12.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+html.pc #v-act .search{position:sticky;top:36px;z-index:2;box-shadow:0 0 0 4px var(--bg),0 -6px 0 4px var(--bg)}
+html.pc #v-rep>.chips,html.pc #v-act .chips{margin-left:0;margin-right:0;padding-left:0;padding-right:0}
+html.pc #queueWrap .sectiontitle{margin-top:0}
+html.pc #queueWrap .card{margin-bottom:16px}
+html.pc .row:hover,html.pc .bsg>summary:hover,html.pc details.card>summary:hover{background:color-mix(in srgb,var(--chip) 55%,transparent)}
+html.pc .view.flash{animation:colflash 1.1s ease}
+@keyframes colflash{0%{box-shadow:inset 0 0 0 2px var(--accent)}100%{box-shadow:inset 0 0 0 2px transparent}}
+
+/* Add as a centred modal */
+html.pc #v-add{position:fixed;z-index:41;top:50%;left:50%;width:min(540px,calc(100vw - 48px));max-height:calc(100vh - 64px);overflow:auto;
+  background:var(--bg);border:1px solid var(--line);border-radius:20px;box-shadow:0 24px 70px rgba(0,0,0,.28);padding:16px 18px 6px;
+  visibility:hidden;opacity:0;transform:translate(-50%,-47%) scale(.98);transition:transform .18s ease,opacity .18s ease,visibility 0s linear .18s}
+html.pc.adding #v-add{visibility:visible;opacity:1;transform:translate(-50%,-50%);transition:transform .18s ease,opacity .18s ease}
+html.pc #v-add>.card{margin-bottom:14px}
+
+/* every other sheet (settings, bulk import, row details, allocations) as a centred dialog */
+html.pc .sheet{top:50%;left:50%;right:auto;bottom:auto;width:min(620px,calc(100vw - 48px));max-width:none;max-height:calc(100vh - 64px);margin:0;
+  border-radius:20px;border:1px solid var(--line);padding:22px 24px 24px;opacity:0;transform:translate(-50%,-47%) scale(.98);
+  transition:transform .18s ease,opacity .18s ease,visibility 0s linear .18s}
+html.pc .sheet.on{opacity:1;transform:translate(-50%,-50%);transition:transform .18s ease,opacity .18s ease}
+html.pc .sheet .grab{display:none}
+</style>
+</head>
+<body>
+
+<header id="hdr">
+  <h1 id="title">Tab 4</h1>
+  <button class="pill" id="status" aria-label="Sync now"><span class="dot" id="statusDot"></span><span id="statusText">…</span></button>
+  <button class="hbtn pconly" id="hPaste" title="Paste multiple rows">Paste rows</button>
+  <button class="hbtn acc pconly" id="hAdd" title="Add a transaction (N)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Add transaction <span class="kbd">N</span></button>
+  <button class="iconbtn" id="gear" aria-label="Settings">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+  </button>
+</header>
+
+<main>
+  <!-- v-add: tab 4 -->
+  <section class="view" id="v-add" role="dialog" aria-label="Add transaction">
+    <div class="addhead pconly"><h2>Add transaction</h2>
+      <button class="iconbtn" id="addClose" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+    <div id="addBanner"></div>
+    <div class="card">
+      <label class="amount"><span id="cur"></span><input id="amt" inputmode="decimal" placeholder="0.00" autocomplete="off" aria-label="Amount"></label>
+      <div class="seg" id="typeSeg"></div>
+      <div class="field">
+        <span class="label">Description</span>
+        <input type="text" id="desc" placeholder="" autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="words">
+        <div class="sugg" id="sugg" hidden></div>
+      </div>
+      <div class="field">
+        <span class="label" id="srcLabel">From</span>
+        <div class="chips" id="srcChips"></div>
+        <select id="src"></select>
+        <div class="s muted" id="srcBal" style="font-size:13px;margin-top:2px"></div>
+      </div>
+      <div class="field">
+        <span class="label" id="dstLabel">To</span>
+        <div class="chips" id="dstChips"></div>
+        <select id="dst"></select>
+      </div>
+      <div class="field">
+        <span class="label">Date</span>
+        <div class="daterow">
+          <input type="date" id="date">
+          <button class="chip" data-day="0">Today</button>
+          <button class="chip" data-day="-1">Yesterday</button>
+        </div>
+      </div>
+    </div>
+    <div class="savebar"><button class="primary" id="save">Save</button><button class="secondary pconly" id="saveMore">Save and add another</button></div>
+    <p class="hint phoneonly" id="saveHint">Saved on this phone first, then added to the Sheet 1 tab on the next sync.</p>
+    <p class="hint pconly"><span class="kbd">Enter</span> saves · <span class="kbd">Shift</span>+<span class="kbd">Enter</span> saves and keeps this open · <span class="kbd">Esc</span> closes</p>
+    <button class="secondary phoneonly" id="bulkBtn" style="margin-bottom:6px">Paste multiple rows</button>
+    <p class="hint phoneonly" id="pasteHint" style="margin-top:6px"></p>
+    <div id="queueWrap"></div>
+  </section>
+
+  <!-- v-bal: tab 2 -->
+  <section class="view" id="v-bal" data-head="Tab 2"></section>
+
+  <!-- v-act: tab 3 -->
+  <section class="view" id="v-act" data-head="Tab 3">
+    <div class="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" type="search" placeholder="Search description, account, amount" autocomplete="off" autocorrect="off" spellcheck="false">
+    </div>
+    <div class="chips" id="actChips" style="margin-bottom:2px"></div>
+    <div id="actList"></div>
+  </section>
+
+  <!-- v-rep: tab 1 -->
+  <section class="view" id="v-rep" data-head="Tab 1"></section>
+</main>
+
+<nav id="tabs">
+  <button data-tab="rep"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Tab 1</button>
+  <button data-tab="bal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="14" rx="3"/><path d="M3 10h18M16 15h2"/><path d="M6 6V5a2 2 0 0 1 2-2h8"/></svg>Tab 2</button>
+  <button data-tab="act"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg>Tab 3</button>
+  <button data-tab="add"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>Tab 4<span class="badge" id="qBadge" hidden></span></button>
+</nav>
+
+<div class="scrim" id="scrim"></div>
+<div class="sheet" id="sheet"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+const VERSION = '1.12.0';
+const LS = { cfg: 'ledger.cfg', rows: 'ledger.rows', blocks: 'ledger.blocks', snap: 'ledger.snap', queue: 'ledger.queue', prefs: 'ledger.prefs', allocs: 'ledger.allocs', conf: 'ledger.conf' };
+const TITLES = { add: '', bal: '', act: '', rep: '' };   // tab labels (Config tab), set by applyConf
+const STALE_DAYS = 21;
+const isPC = () => document.documentElement.classList.contains('pc');   // desktop dashboard layout
+const here = () => (isPC() ? 'this computer' : 'this phone');
+
+/* ---------- storage ---------- */
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { toast((isPC() ? 'Browser' : 'Phone') + ' storage is full. Clear cached data in Settings.', 'err'); return false; } },
+  del(k) { try { localStorage.removeItem(k); } catch (e) {} },
+};
+store.del('ledger.cache'); // v1.0 format
+let cfg = store.get(LS.cfg, null);
+let rows = store.get(LS.rows, []);       // the full log, ascending by sheet row
+let blocks = store.get(LS.blocks, {});   // { blockStartRow: hash } from the last sync
+let snap = store.get(LS.snap, null);     // { options, dashboard, bufferRows, syncedAt, lastRow }
+let queue = store.get(LS.queue, []);     // entries logged here and not yet confirmed by the sheet
+let prefs = Object.assign({ lastSrc: {}, lastDst: {}, tab: 'add', closed: {}, open: {} }, store.get(LS.prefs, {}));
+const saveQueue = () => { store.set(LS.queue, queue); dirty(); };
+const savePrefs = () => store.set(LS.prefs, prefs);
+
+const state = { tab: prefs.tab, type: null, syncing: false, flushing: false, flushError: false, lastError: null,
+  filter: { q: '', type: 'All', account: null }, highlight: null, shownRows: [] };
+
+/* ---------- helpers ---------- */
+const $ = (s, el = document) => el.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+// finance style: negatives in parentheses, e.g. (1,200.00), with the Config tab's currency sign in front
+const money = (n, opt = {}) => { if (n == null) return '—'; const body = CUR + (opt.round ? nf0 : nf).format(Math.abs(n)); return n < -0.004 ? '(' + body + ')' : (opt.plus ? '+' : '') + body; };
+const r2 = n => Math.round(n * 100) / 100;
+const clean = s => String(s || '').trim();
+const recKey = s => clean(s).replace(/\s+/g, ' ').toLowerCase();   // per-person receivable key
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
+function isoDay(offset = 0) { const d = new Date(); d.setDate(d.getDate() + offset); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); }
+function parseISO(s) { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s || ''); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; }
+function dayLabel(s) {
+  const d = parseISO(s); if (!d) return s;
+  if (s === isoDay(0)) return 'Today'; if (s === isoDay(-1)) return 'Yesterday';
+  const opt = { weekday: 'short', month: 'short', day: 'numeric' };
+  if (d.getFullYear() !== new Date().getFullYear()) opt.year = 'numeric';
+  return d.toLocaleDateString('en-US', opt);
+}
+function sheetDate(s) { const d = parseISO(s); return d ? `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}/${String(d.getFullYear()).slice(2)}` : s; }
+function mdyToDate(s) { const m = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/.exec(s || ''); if (!m) return null; let y = +m[3]; if (y < 100) y += 2000; return new Date(y, +m[1] - 1, +m[2]); }
+function shortMDY(s) { const d = mdyToDate(s); return d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: d.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined }) : s; }
+function rel(iso) {
+  const ms = Date.now() - Date.parse(iso); if (!isFinite(ms)) return '';
+  const m = Math.round(ms / 60000); if (m < 1) return 'just now'; if (m < 60) return m + 'm ago';
+  const h = Math.round(m / 60); if (h < 24) return h + 'h ago'; return Math.round(h / 24) + 'd ago';
+}
+const unmoney = s => (CUR ? String(s).split(CUR).join('') : String(s)).replace(/[,\s]/g, '');   // typed or pasted amount, without the sign and separators
+function parseAmount(s) { const n = Number(unmoney(s)); return isFinite(n) ? r2(n) : NaN; }
+let toastTimer;
+function toast(msg, kind) { const t = $('#toast'); t.textContent = msg; t.className = 'toast on' + (kind === 'err' ? ' err' : ''); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.className = 'toast', 2800); }
+
+/* ---------- the owner's settings (Config tab) ----------
+   Names, thresholds, currency and examples are the owner's and live in the sheet's Config tab, not in this public file.
+   Each sync carries the tab's rows as `config` (column A a key, the next columns its values); the last copy is kept in
+   ledger.conf. A key with no row, or no copy yet, takes the generic default set here: no currency sign, en-US digits,
+   a tolerance of half a cent, no outliers, and every disbursement under Other. */
+let CUR = '', TOL = 0.005, CF_BIG = 0, nf, nf0, PASTE_EX = '';
+let RECEIVABLE_ACCTS = [], NOT_POOL = new Set(), INFLOW_EXCLUDE = new Set(), RETIRED = new Set(), BAD_DEBTS = '', PROVISIONED = '', ACCRUED = '';
+let CF_GROUPS = [], CF_G = {}, CF_BY_NAME = {}, CF_RES = 'other';
+let TY = {}, TYL = {}, TYP = {}, ALIAS = Object.create(null), TAB = {}, SHEET = {}, FIG = {}, LN = {}, AP_NAME = '', SUM_NET = '', MIX_SUFFIX = '';
+const NEVER = /(?!)/;
+function applyConf(rows) {
+  const m = {}, gs = [];
+  (Array.isArray(rows) ? rows : []).forEach(r => {
+    if (!Array.isArray(r)) return;
+    const k = clean(r[0]).toLowerCase(), v = r.slice(1).map(x => String(x == null ? '' : x));
+    if (/^(reserve |other )?group$/.test(k)) gs.push([k.split(' ')[0], v]); else if (k && !(k in m)) m[k] = v;
+  });
+  const list = k => (m[k] || []).map(clean).filter(Boolean), one = k => list(k)[0] || '';
+  const num = (k, d) => { const n = Number(unmoney(one(k))); return one(k) && n >= 0 ? n : d; };   // after CUR is set
+  const fmt = o => { try { return new Intl.NumberFormat(one('number locale') || 'en-US', o); } catch (e) { return new Intl.NumberFormat('en-US', o); } };
+  CUR = one('currency'); TOL = num('tolerance', 0.005); CF_BIG = num('outlier', 0);
+  nf = fmt({ minimumFractionDigits: 2, maximumFractionDigits: 2 }); nf0 = fmt({ maximumFractionDigits: 0 });
+  RECEIVABLE_ACCTS = list('receivable accounts'); BAD_DEBTS = one('allowance account');
+  PROVISIONED = one('provisioned account'); ACCRUED = one('accrued income');
+  NOT_POOL = new Set(RECEIVABLE_ACCTS.concat(BAD_DEBTS || []));        // outside the pool, with lines 5 to 7
+  INFLOW_EXCLUDE = new Set(list('not income')); RETIRED = new Set(list('retired'));   // retired: still in the pairs tab, no longer logged
+  // Cash flow groups in stack order, bottom to top. Colours go by position (--g1 to --g7, checked as adjacent pairs for
+  // colour-blind separation); the Other group always takes the neutral --g8. The reserve group takes maintaining-balance
+  // moves and money sent to accounts outside the pool; without one they go to Other.
+  CF_GROUPS = []; const seen = {}; let c = 0;
+  gs.forEach(([role, v], i) => {
+    const k = role === 'group' ? 'g' + i : role; if (seen[k]) return; seen[k] = 1;
+    let re = null; try { if (v[1] && v[1].trim()) re = new RegExp(v[1], 'i'); } catch (e) {}
+    CF_GROUPS.push({ k, name: clean(v[0]) || (role === 'other' ? 'Other' : 'Group ' + (i + 1)), c: role === 'other' ? 'var(--g8)' : `var(--g${c++ % 7 + 1})`, cats: v.slice(2).map(clean).filter(Boolean), re });
+  });
+  if (!seen.other) CF_GROUPS.push({ k: 'other', name: 'Other', c: 'var(--g8)', cats: [], re: null });
+  CF_G = Object.fromEntries(CF_GROUPS.map(g => [g.k, g]));
+  CF_BY_NAME = {}; CF_GROUPS.forEach(g => g.cats.forEach(n => CF_BY_NAME[n.toLowerCase()] = g.k));
+  CF_RES = CF_G.reserve ? 'reserve' : 'other';
+  PASTE_EX = list('paste example').join('\t') || 'MM/DD/YY\tDescription\tType\tSource\tDestination\tAmount';
+  // Names. Which of the pairs tab's types is the outflow, the inflow and the transfer (value, label, plural label, other
+  // words accepted in bulk import); the four tab labels in tab-bar order; the sheet's tabs (1 the log, 2 the pairs per
+  // type, 3 the summary read into `dashboard`); figures 1 to 4 of the cascade; and lines 1 to 10 of the summary tab
+  // (header pattern, label). A missing name shows a numbered stand-in such as "Tab 2" or "Line 7".
+  const cell = (k, i) => clean((m[k] || [])[i]);
+  const rx = s => { try { return s ? new RegExp(s, 'i') : NEVER; } catch (e) { return NEVER; } };
+  TY = {}; TYL = {}; TYP = {}; ALIAS = Object.create(null);
+  [['out', 'outflow type'], ['in', 'inflow type'], ['tr', 'transfer type']].forEach(([r, k]) => {
+    const v = cell(k, 0); TY[r] = v || null; if (!v || v in TYL) return;   // a value listed twice keeps its first labels
+    TYL[v] = cell(k, 1) || v; TYP[v] = cell(k, 2) || TYL[v];
+    [v, TYL[v], TYP[v]].concat((m[k] || []).slice(3).map(clean)).forEach(w => { if (w && !(w.toLowerCase() in ALIAS)) ALIAS[w.toLowerCase()] = v; });
+  });
+  [1, 2, 3, 4].forEach(i => { TAB[i] = cell('tab ' + i, 0) || 'Tab ' + i; FIG[i] = cell('figure ' + i, 0) || 'Figure ' + i; });
+  [1, 2, 3].forEach(i => { SHEET[i] = cell('sheet tab ' + i, 0) || 'Sheet ' + i; });
+  FIG.short3 = cell('figure 3', 1) || FIG[3]; SUM_NET = cell('figure 4', 1);
+  for (let i = 1; i <= 10; i++) LN[i] = { re: rx(cell('line ' + i, 0)), label: cell('line ' + i, 1) || 'Line ' + i };
+  AP_NAME = cell('line 10', 2); MIX_SUFFIX = cell('asset mix suffix', 0);
+  Object.assign(TITLES, { rep: TAB[1], bal: TAB[2], act: TAB[3], add: TAB[4] });
+  document.querySelectorAll('nav button').forEach(b => { const t = [...b.childNodes].find(n => n.nodeType === 3); if (t) t.nodeValue = TITLES[b.dataset.tab]; });
+  [['rep', 1], ['bal', 2], ['act', 3]].forEach(([v, i]) => { $('#v-' + v).dataset.head = TAB[i]; });
+  $('#title').textContent = isPC() ? 'Ledger' : TITLES[state.tab] || TITLES.add;
+  $('#saveHint').textContent = `Saved on this phone first, then added to the ${SHEET[1]} tab on the next sync.`;
+  $('#cur').textContent = CUR; $('#desc').placeholder = one('description example');
+  $('#pasteHint').textContent = one('paste hint') || 'For rows copied from the sheet.';
+  dirty();
+}
+
+/* ---------- options from the pairs tab (sheet tab 2) ---------- */
+const optMap = () => (snap && snap.options && snap.options.map) || {};
+/** The types in role order (outflow, inflow, transfer); without the Config rows, the pairs tab's own types. */
+const types = () => { const t = [TY.out, TY.in, TY.tr].filter(Boolean); return t.length ? t.filter((v, i) => t.indexOf(v) === i) : Object.keys(optMap()); };
+const isT = (t, role) => t != null && t === TY[role];
+const typeLabel = t => TYL[t] || t, typePlural = t => TYP[t] || typeLabel(t);
+const typeMap = t => (t != null && optMap()[t]) || {};
+/** A type typed or pasted: its value, label, plural label or another listed word, without case. */
+const typeOf = s => { const k = clean(s).toLowerCase(); if (ALIAS[k]) return ALIAS[k]; return TY.out || TY.in || TY.tr ? null : types().find(t => clean(t).toLowerCase() === k) || null; };
+const orList = a => a.length > 1 ? a.slice(0, -1).join(', ') + ' or ' + a[a.length - 1] : a[0] || '';
+const lc = s => s && s.length > 1 && s[1] === s[1].toLowerCase() ? s[0].toLowerCase() + s.slice(1) : s;   // a sentence-case name mid-sentence
+const sheetOnly = label => LN[9].re.test(label) || LN[6].re.test(label);   // summary lines the app can't derive from the log
+const tyP = (role, fallback) => (TY[role] ? typePlural(TY[role]) : fallback);   // a type's plural label by role, for headings
+const typeWords = () => { const t = [TY.in, TY.out, TY.tr].filter(Boolean); return t.length ? t : types(); };   // the type values a pasted row may use
+const sourcesFor = type => Object.keys(optMap()[type] || {}).filter(s => !RETIRED.has(clean(s))).sort((a, b) => clean(a).localeCompare(clean(b)));
+const destsFor = (type, src) => ((optMap()[type] || {})[src] || []).slice().sort((a, b) => clean(a).localeCompare(clean(b)));
+
+/* ---------- the app's own ledger math ---------- */
+let D = null;
+function dirty() { D = null; }
+function derived() {
+  if (D) return D;
+  const accounts = new Set();
+  Object.keys(typeMap(TY.out)).forEach(s => accounts.add(clean(s)));
+  Object.entries(typeMap(TY.tr)).forEach(([s, ds]) => { accounts.add(clean(s)); ds.forEach(d => accounts.add(clean(d))); });
+  Object.values(typeMap(TY.in)).forEach(ds => ds.forEach(d => accounts.add(clean(d))));
+
+  // Same rule as the summary tab: Σ amount where the name is Destination − Σ amount where it is Source
+  const apply = (bal, r, sign = 1) => {
+    const a = (Number(r.amount) || 0) * sign;
+    const d = clean(r.dest), s = clean(r.source);
+    bal[d] = (bal[d] || 0) + a; bal[s] = (bal[s] || 0) - a;
+  };
+  const synced = {}; rows.forEach(r => apply(synced, r));
+  const live = Object.assign({}, synced);
+  const pend = queue.filter(e => e.status !== 'failed');
+  pend.forEach(e => apply(live, e));
+
+  // receivables per person: description-level net of the receivable accounts' movements (Config tab)
+  // Names match case-insensitively, like the summary tab's SUMIF; the most recent spelling is the one shown.
+  const recv = {}, recvName = {};
+  const recSet = new Set(RECEIVABLE_ACCTS);
+  rows.concat(pend).forEach(r => {
+    if (!recSet.has(clean(r.dest)) && !recSet.has(clean(r.source))) return;
+    const name = clean(r.desc), k = recKey(name), a = Number(r.amount) || 0; recvName[k] = name;
+    if (recSet.has(clean(r.dest))) recv[k] = (recv[k] || 0) + a;
+    if (recSet.has(clean(r.source))) recv[k] = (recv[k] || 0) - a;
+  });
+
+  // this month's spending by category (outflow-type rows into a non-account destination)
+  const ym = isoDay(0).slice(0, 7);
+  const cats = {}; let monthTotal = 0;
+  rows.concat(pend).forEach(r => {
+    if (!isT(r.type, 'out') || !String(r.date).startsWith(ym) || accounts.has(clean(r.dest))) return;
+    cats[clean(r.dest)] = (cats[clean(r.dest)] || 0) + (Number(r.amount) || 0); monthTotal += Number(r.amount) || 0;
+  });
+
+  // description templates (most recent use wins)
+  const tpl = {};
+  rows.slice(-3000).forEach(r => {
+    const k = clean(r.desc).toLowerCase(); if (!k) return;
+    const t = tpl[k] || (tpl[k] = { desc: clean(r.desc), n: 0 });
+    t.n++; t.type = r.type; t.source = r.source; t.dest = r.dest; t.amount = r.amount; t.last = r.date;
+  });
+  const templates = Object.values(tpl).sort((a, b) => b.n - a.n || (a.last < b.last ? 1 : -1));
+
+  // usage frequency over the last ~400 rows, for quick-pick chips
+  const freqS = {}, freqD = {};
+  rows.slice(-400).forEach(r => {
+    freqS[r.type] = freqS[r.type] || {}; freqS[r.type][r.source] = (freqS[r.type][r.source] || 0) + 1;
+    const k = r.type + '|' + r.source; freqD[k] = freqD[k] || {}; freqD[k][r.dest] = (freqD[k][r.dest] || 0) + 1;
+    freqD[r.type] = freqD[r.type] || {}; freqD[r.type][r.dest] = (freqD[r.type][r.dest] || 0) + 0.1;
+  });
+
+  // reconcile: log-derived balance vs the sum of that name's summary-tab cells
+  const dash = (snap && snap.dashboard) || { groups: [] };
+  const sheetBy = {};
+  dash.groups.forEach(g => { if (sheetOnly(g.label)) return; g.items.forEach(it => { sheetBy[clean(it.name)] = (sheetBy[clean(it.name)] || 0) + it.value; }); });
+  const diffs = Object.keys(sheetBy).map(n => ({ name: n, app: r2(synced[n] || 0), sheet: r2(sheetBy[n]), diff: r2((synced[n] || 0) - sheetBy[n]) }))
+    .filter(x => Math.abs(x.diff) > TOL && !(x.sheet === 0 && Math.abs(x.app) <= TOL));
+  const dashRec = dash.groups.find(g => LN[6].re.test(g.label));
+  const recDiffs = dashRec ? dashRec.items.map(it => ({ name: clean(it.name), app: r2(recv[recKey(it.name)] || 0), sheet: r2(it.value) }))
+    .filter(x => Math.abs(x.app - x.sheet) > TOL) : [];
+
+  D = { accounts, synced, live, pend, recv, recvName, cats, monthTotal, ym, templates, freqS, freqD, sheetBy, diffs, dashRec, recDiffs, checked: Object.keys(sheetBy).length };
+  return D;
+}
+const bal = name => r2(derived().live[clean(name)] || 0);
+const queuedDelta = name => r2((derived().live[clean(name)] || 0) - (derived().synced[clean(name)] || 0));
+function topN(counter, n) { return Object.entries(counter || {}).sort((a, b) => b[1] - a[1]).slice(0, n).map(x => x[0]); }
+function freqSources(type) { const valid = new Set(sourcesFor(type)); return topN(derived().freqS[type], 10).filter(s => valid.has(s)).slice(0, 4); }
+function freqDests(type, src) {
+  const valid = new Set(destsFor(type, src));
+  const a = topN(derived().freqD[type + '|' + src], 10).filter(d => valid.has(d));
+  const b = topN(derived().freqD[type], 12).filter(d => valid.has(d) && !a.includes(d));
+  return a.concat(b).slice(0, 5);
+}
+
+/* ---------- sync with the sheet ---------- */
+async function api(action, payload = {}, conf = cfg) {
+  if (!conf || !conf.url) throw Object.assign(new Error('Not connected'), { setup: true });
+  const ctl = new AbortController(); const timer = setTimeout(() => ctl.abort(), 60000);
+  let res;
+  try {
+    res = await fetch(conf.url, {
+      method: 'POST', redirect: 'follow', cache: 'no-store', signal: ctl.signal,
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(Object.assign({ key: conf.key, action }, payload)),
+    });
+  } catch (e) {
+    throw Object.assign(new Error(e.name === 'AbortError' ? 'The sheet took too long to answer' : 'No connection to the sheet'), { network: true });
+  } finally { clearTimeout(timer); }
+  const text = await res.text();
+  let j; try { j = JSON.parse(text); } catch (e) {
+    throw new Error('Got a web page instead of data. Check the deployment is set to "Anyone" and the URL ends in /exec.');
+  }
+  if (!j.ok) throw Object.assign(new Error(j.error || 'Sheet error'), { auth: j.auth === false, server: true });
+  return j.data;
+}
+
+/** Merge a sync payload: replace rows in changed blocks, drop rows past the sheet's last row. */
+function applySync(d) {
+  const changed = d.blocks.filter(b => blocks[b.s] !== b.h);
+  const inChanged = r => changed.some(b => r.row >= b.s && r.row <= b.e);
+  rows = rows.filter(r => r.row <= d.lastRow && !inChanged(r)).concat(d.rows).sort((a, b) => a.row - b.row);
+  blocks = {}; d.blocks.forEach(b => blocks[b.s] = b.h);
+  snap = { options: d.options, dashboard: d.dashboard, bufferRows: d.bufferRows, syncedAt: d.syncedAt, lastRow: d.lastRow, pulled: d.rows.length };
+  const ok = store.set(LS.rows, rows) && store.set(LS.blocks, blocks);
+  if (!ok) blocks = {};               // force a full re-pull next time rather than trust a partial save
+  store.set(LS.snap, snap);
+  if (d.config) { store.set(LS.conf, d.config); applyConf(d.config); }   // the Config tab, from a back end that sends it
+  dirty();
+}
+
+async function sync() {
+  if (!cfg || state.syncing) return;
+  if (!navigator.onLine) { renderStatus(); return; }
+  state.syncing = true; renderStatus();
+  try {
+    if (queue.some(e => e.status !== 'failed')) await flush(true);
+    else { applySync(await api('sync', { have: blocks })); state.lastError = null; }
+    await syncAllocs();
+  } catch (e) { onError(e); }
+  finally { state.syncing = false; renderAll(); }
+}
+
+async function flush(fromSync) {
+  if (!cfg || state.flushing) return;
+  const pending = queue.filter(e => e.status !== 'failed');
+  if (!pending.length) return;
+  if (!navigator.onLine) { renderStatus(); return; }
+  state.flushing = true; state.flushError = false; renderStatus();
+  try {
+    const data = await api('add', { entries: pending.map(({ status, error, ...e }) => e), have: blocks });
+    const byId = {}; data.results.forEach(r => byId[r.id] = r);
+    let sent = 0, failed = 0;
+    queue = queue.filter(e => {
+      const r = byId[e.id]; if (!r) return true;
+      if (r.ok) { sent++; return false; }
+      e.status = 'failed'; e.error = r.error; failed++; return true;
+    });
+    applySync(data.sync); saveQueue(); state.lastError = null;
+    if (failed) toast((failed === 1 ? '1 entry was rejected' : failed + ' entries were rejected') + (isPC() ? '. See the queue above ' + TAB[3] + '.' : '. See the ' + TAB[4] + ' tab.'), 'err');
+    else if (sent) toast(sent === 1 ? 'Logged to your sheet' : sent + ' rows logged to your sheet');
+  } catch (e) { state.flushError = true; onError(e); }
+  finally { state.flushing = false; if (!fromSync) renderAll(); }
+}
+
+function onError(e) {
+  state.lastError = e.message;
+  if (e.auth) { toast('The key was rejected', 'err'); openSettings('The sheet rejected the key. Run showKey() in the script editor and paste the current key.'); return; }
+  if (!e.network) toast(e.message, 'err');
+}
+
+/* ---------- status pill ---------- */
+function renderStatus() {
+  const dot = $('#statusDot'), txt = $('#statusText');
+  const pend = queue.filter(e => e.status !== 'failed').length, fail = queue.length - pend;
+  let cls = '', t = '';
+  if (!cfg) { cls = 'warn'; t = 'Not connected'; }
+  else if (state.syncing || state.flushing) { cls = 'spin'; t = 'Syncing'; }
+  else if (fail) { cls = 'err'; t = fail + ' rejected'; }
+  else if (pend && !navigator.onLine) { cls = 'warn'; t = pend + ' queued · offline'; }
+  else if (pend) { cls = 'warn'; t = pend + ' queued'; }
+  else if (!navigator.onLine) { cls = 'warn'; t = 'Offline'; }
+  else if (state.lastError) { cls = 'err'; t = 'Sync failed'; }
+  else if (snap && snap.syncedAt) { cls = 'ok'; t = rel(snap.syncedAt); }
+  else { t = 'Tap to sync'; }
+  dot.className = 'dot ' + cls; txt.textContent = t;
+  const b = $('#qBadge'); b.hidden = !queue.length; b.textContent = queue.length;
+}
+
+/* ---------- the add form (tab 4) ---------- */
+function fillSelect(sel, items, value, placeholder) {
+  sel.innerHTML = (placeholder ? `<option value="" disabled>${esc(placeholder)}</option>` : '') +
+    items.map(v => `<option value="${esc(v)}">${esc(clean(v))}</option>`).join('');
+  sel.value = items.includes(value) ? value : (items[0] || '');
+}
+function renderType() {
+  if (!types().includes(state.type)) state.type = types()[0] || null;
+  const seg = $('#typeSeg'), html = types().map(t => `<button data-type="${esc(t)}">${esc(typeLabel(t))}</button>`).join('');
+  if (seg._html !== html) { seg.innerHTML = html; seg._html = html; }   // rebuilt only when the types change, so focus stays
+  document.querySelectorAll('#typeSeg button').forEach(b => b.classList.toggle('on', b.dataset.type === state.type));
+  $('#srcLabel').textContent = isT(state.type, 'in') ? 'Income from' : 'From';
+  $('#dstLabel').textContent = isT(state.type, 'in') ? 'Into' : isT(state.type, 'out') ? 'Category' : 'To';
+}
+function renderSrcBal() {
+  const s = $('#src').value, el = $('#srcBal');
+  el.textContent = s && derived().accounts.has(clean(s)) ? 'Balance ' + money(bal(s)) : '';
+}
+function renderSources(keep) {
+  const sel = $('#src'); const list = sourcesFor(state.type);
+  const want = keep && list.includes(keep) ? keep : (prefs.lastSrc[state.type] || freqSources(state.type)[0]);
+  fillSelect(sel, list, want, list.length ? null : 'Sync to load accounts');
+  const chips = freqSources(state.type);
+  $('#srcChips').innerHTML = chips.map(s => `<button class="chip${s === sel.value ? ' on' : ''}" data-v="${esc(s)}">${esc(clean(s))}</button>`).join('');
+  $('#srcChips').hidden = !chips.length;
+  renderSrcBal();
+}
+function renderDests(keep) {
+  const sel = $('#dst'); const src = $('#src').value; const list = destsFor(state.type, src);
+  const want = keep && list.includes(keep) ? keep : (prefs.lastDst[state.type + '|' + src] || freqDests(state.type, src)[0]);
+  fillSelect(sel, list, want, list.length ? null : '—');
+  const chips = freqDests(state.type, src);
+  $('#dstChips').innerHTML = chips.map(s => `<button class="chip${s === sel.value ? ' on' : ''}" data-v="${esc(s)}">${esc(clean(s))}</button>`).join('');
+  $('#dstChips').hidden = !chips.length;
+}
+function markChips(box, val) { box.querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c.dataset.v === val)); }
+function renderAddForm(keepSrc, keepDst) {
+  renderType(); renderSources(keepSrc || $('#src').value); renderDests(keepDst || $('#dst').value);
+  if (!$('#date').value) $('#date').value = isoDay(0);
+  markDateChips();
+}
+function markDateChips() { document.querySelectorAll('[data-day]').forEach(c => c.classList.toggle('on', $('#date').value === isoDay(+c.dataset.day))); }
+
+function renderSuggestions() {
+  const box = $('#sugg'); const q = clean($('#desc').value).toLowerCase();
+  const tpl = derived().templates;
+  if (!q || document.activeElement !== $('#desc')) { box.hidden = true; return; }
+  const starts = [], contains = [];
+  for (let i = 0; i < tpl.length && starts.length < 5; i++) {
+    const d = tpl[i].desc.toLowerCase();
+    if (d === q) continue;
+    if (d.startsWith(q)) starts.push(i); else if (contains.length < 5 && d.includes(q)) contains.push(i);
+  }
+  const list = starts.concat(contains).slice(0, 5);
+  if (!list.length) { box.hidden = true; return; }
+  box.innerHTML = list.map(i => { const t = tpl[i]; return `<button data-i="${i}"><b>${esc(t.desc)}</b>
+    <small>${esc(typeLabel(t.type))} · ${esc(clean(t.source))} → ${esc(clean(t.dest))} · last ${esc(money(t.amount))}</small></button>`; }).join('');
+  box.hidden = false;
+}
+function applyTemplate(t) {
+  $('#desc').value = t.desc;
+  if (types().includes(t.type)) state.type = t.type;
+  renderAddForm(t.source, t.dest);
+  $('#sugg').hidden = true;
+}
+
+function renderQueue() {
+  const wrap = $('#queueWrap');
+  if (!queue.length) { wrap.innerHTML = ''; return; }
+  wrap.innerHTML = `<div class="sectiontitle">Waiting to reach the sheet</div><div class="card">` + queue.map(e => `
+    <div class="qitem">
+      <div class="grow">
+        <div style="font-weight:600">${esc(e.desc)}</div>
+        <div class="muted" style="font-size:13px">${esc(dayLabel(e.date))} · ${esc(clean(e.source))} → ${esc(clean(e.dest))}</div>
+        ${e.status === 'failed' ? `<div class="err">${esc(e.error || 'Rejected')}</div>` : `<div class="faint" style="font-size:12.5px;margin-top:2px">${navigator.onLine ? 'Sending' : 'Sends when you’re back online'}</div>`}
+        ${e.status === 'failed' ? `<div class="acts"><button data-q="edit" data-id="${e.id}">Edit</button><button data-q="retry" data-id="${e.id}">Retry</button><button data-q="del" data-id="${e.id}">Delete</button></div>` : ''}
+      </div>
+      <div class="num" style="font-weight:600">${esc(money(e.amount))}</div>
+    </div>`).join('') + `</div>`;
+}
+
+function renderAddBanner() {
+  const el = $('#addBanner'); const parts = [];
+  if (snap && snap.bufferRows != null && snap.bufferRows < 40)
+    parts.push(`<div class="banner warn">Only ${snap.bufferRows} blank rows are left in ${esc(SHEET[1])} above the placeholder rows at the bottom. Insert more blank rows there soon.</div>`);
+  if (cfg && !snap) parts.push(`<div class="banner warn">Your accounts haven’t loaded yet. Tap the status pill at the top to sync.</div>`);
+  el.innerHTML = parts.join('');
+}
+
+/* ---------- balances (tab 2) ---------- */
+const chev = () => `<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>`;
+function acctRow(name, opts = {}) {
+  const x = derived(); const v = bal(name); const q = queuedDelta(name);
+  const diff = x.diffs.find(d => d.name === clean(name));
+  const upd = opts.updated ? mdyToDate(opts.updated) : null;
+  const stale = upd && (Date.now() - upd) / 864e5 > STALE_DAYS;
+  const meta = [opts.rate ? opts.rate + ' p.a.' : '', opts.earmark ? money(opts.earmark) + ' earmarked' : '', opts.updated ? 'updated ' + shortMDY(opts.updated) : '',
+    q ? `${money(q, { plus: true })} queued` : ''].filter(Boolean);
+  return `<button class="row" data-acct="${esc(clean(name))}">
+    <div class="grow"><div class="t">${esc(clean(name))}</div>
+      ${meta.length || diff ? `<div class="s">${stale ? '<span class="stale"></span>' : ''}${esc(meta.join(' · '))}${diff ? `${meta.length ? ' · ' : ''}<span class="flag">${esc(SHEET[3])} ${esc(money(diff.sheet))}</span>` : ''}</div>` : ''}</div>
+    <div class="v ${v < -0.004 ? 'neg' : Math.abs(v) < 0.005 ? 'tr' : ''}">${esc(money(v))}</div></button>`;
+}
+function groupCard(key, label, total, inner, totalCls) {
+  const open = !prefs.closed[key];
+  return `<details class="card" data-key="${esc(key)}" ${open ? 'open' : ''}><summary><span class="grow">${esc(label)}</span>
+    <span class="num ${totalCls || 'muted'}" style="font-weight:600">${esc(money(total))}</span>${chev()}</summary>${inner}</details>`;
+}
+function earmarkMap(dash) {
+  const m = {};
+  dash.groups.filter(g => LN[3].re.test(g.label)).forEach(g => g.items.forEach(it => m[clean(it.name)] = it.value));
+  return m;
+}
+/** Pro forma balance sheet in the summary tab's structure, valued from the app's own ledger math. */
+function balanceSheet(dash) {
+  const x = derived(); const earmarks = earmarkMap(dash);
+  const items = re => dash.groups.filter(g => re.test(g.label)).flatMap(g => g.items);
+  const line = (it, value, meta) => ({ name: clean(it.name), value: r2(value), rate: it.rate, updated: it.updated, meta: meta || '', acct: x.accounts.has(clean(it.name)) });
+  const wallets = items(LN[1].re).map(it => {
+    const raw = bal(it.name), e = earmarks[clean(it.name)] || 0, v = raw - e > TOL ? raw - e : 0;
+    return line(it, v, e ? `${money(e)} earmarked · balance ${money(raw)}` : Math.abs(v - raw) > 0.004 ? `balance ${money(raw)}` : '');
+  });
+  const plain = re => items(re).map(it => line(it, bal(it.name)));
+  const restricted = items(LN[3].re).map(it => line(it, it.value, 'earmarked portion'));
+  const recG = dash.groups.find(g => LN[6].re.test(g.label));
+  const recv = (recG ? recG.items : []).map(it => ({ name: clean(it.name), value: r2(x.recv[recKey(it.name)] || 0), who: true, sheet: it.value }));
+  const onDash = new Set(recv.map(r => recKey(r.name)));
+  const recvExtra = Object.entries(x.recv).filter(([k, v]) => v >= TOL && !onDash.has(k)).sort((a, b) => b[1] - a[1]).map(([k, v]) => ({ name: x.recvName[k], value: r2(v), who: true }));
+  const cards = items(LN[8].re).map(it => line(it, -bal(it.name), bal(it.name) > 0.004 ? 'credit balance' : ''));
+  const ap = AP_NAME ? [{ name: AP_NAME, value: apAmount(dash), acct: x.accounts.has(AP_NAME) }] : [];
+  const total = arr => r2(arr.reduce((s, i) => s + (i.total != null ? i.total : i.value), 0));
+  const mk = (key, label, list, extra) => ({ key, label, items: list, extra, total: total(list) });
+  const assets = [mk('wallets', LN[1].label, wallets), mk('savings', LN[2].label, plain(LN[2].re)), mk('restricted', LN[3].label, restricted),
+    mk('sti', LN[4].label, plain(LN[4].re)), mk('lti', LN[5].label, plain(LN[5].re)),
+    mk('recv', LN[6].label, recv, recvExtra), mk('l7', LN[7].label, plain(LN[7].re))].filter(g => g.items.length);
+  const liabilities = [mk('cards', LN[8].label, cards), mk('ap', LN[10].label, ap)].filter(g => g.items.length);
+  const placed = new Set(dash.groups.filter(g => !sheetOnly(g.label)).flatMap(g => g.items.map(i => clean(i.name))));
+  const others = [...x.accounts].filter(a => !placed.has(a) && !RECEIVABLE_ACCTS.includes(a) && a !== AP_NAME && Math.abs(bal(a)) >= 0.5)
+    .sort().map(n => ({ name: n, value: bal(n), acct: true }));
+  const ta = total(assets), tl = total(liabilities);
+  return { assets, liabilities, ta, tl, net: r2(ta - tl), others, allocs: allocItems(dash) };
+}
+function bsRow(it) {
+  const x = derived(); const diff = it.acct && x.diffs.find(d => d.name === it.name);
+  const q = it.acct ? queuedDelta(it.name) : 0;
+  const upd = it.updated ? mdyToDate(it.updated) : null;
+  const stale = upd && (Date.now() - upd) / 864e5 > STALE_DAYS;
+  const meta = [it.rate ? it.rate + ' p.a.' : '', it.meta, it.updated ? 'updated ' + shortMDY(it.updated) : '', q ? `${money(q, { plus: true })} queued` : ''].filter(Boolean);
+  const off = it.sheet != null && Math.abs(it.sheet - it.value) > TOL;
+  const tag = it.acct ? `button class="row bsi" data-acct="${esc(it.name)}"` : it.who ? `button class="row bsi" data-who="${esc(it.name)}"` : 'div class="row bsi"';
+  return `<${tag}><div class="grow"><div class="t">${esc(it.name)}</div>${meta.length || diff || off ? `<div class="s">${stale ? '<span class="stale"></span>' : ''}${esc(meta.join(' · '))}${diff ? `${meta.length ? ' · ' : ''}<span class="flag">${esc(SHEET[3])} ${esc(money(diff.sheet))}</span>` : ''}${off ? `${meta.length ? ' · ' : ''}<span class="flag">${esc(SHEET[3])} ${esc(money(it.sheet))}</span>` : ''}</div>` : ''}</div>
+    <div class="v ${it.value < -0.004 ? 'neg' : Math.abs(it.value) < 0.005 ? 'tr' : ''}">${esc(money(it.value))}</div></${tag.split(' ')[0]}>`;
+}
+function bsGroup(g) {
+  const open = prefs.open[g.key];
+  return `<details class="bsg" data-okey="${g.key}" ${open ? 'open' : ''}><summary><span class="grow">${esc(g.label)}</span>
+    <span class="num ${g.total < -0.004 ? 'neg' : ''}">${esc(money(g.total))}</span>${chev()}</summary>
+    ${g.items.map(bsRow).join('')}
+    ${g.extra && g.extra.length ? `<div class="bsnote">Also open in the log, not on the ${esc(SHEET[3])} and not in the total</div>${g.extra.map(bsRow).join('')}` : ''}</details>`;
+}
+function renderBalances() {
+  const el = $('#v-bal'); const dash = snap && snap.dashboard;
+  if (!dash) { el.innerHTML = `<div class="empty">${esc(TAB[2])} appear after the first sync.</div>`; return; }
+  const x = derived();
+  const sum = Object.fromEntries((dash.summary || []).map(s => [s.label, s]));
+  const pendNet = x.pend.reduce((a, e) => a + (isT(e.type, 'in') ? +e.amount : isT(e.type, 'out') ? -e.amount : 0), 0);
+  const c = cascade(dash);
+  const bs = balanceSheet(dash);
+  const sheetNet = SUM_NET && sum[SUM_NET] ? sum[SUM_NET].value : null;   // figure 4's summary row; no row, no check
+  const netOff = sheetNet != null && Math.abs(bs.net - pendNet - sheetNet) > TOL;
+  const cardsOwed = (bs.liabilities.find(g => g.key === 'cards') || { total: 0 }).total;
+  const monthName = parseISO(x.ym + '-01').toLocaleDateString('en-US', { month: 'long' });
+
+  let html = `<div class="card hero">
+    <button data-nca="1" style="text-align:left;display:block;width:100%">
+      <div class="label">${esc(FIG[3])}${x.pend.length ? ' · incl. queued' : ''}</div>
+      <div class="big ${c.nca < 0 ? 'neg' : ''}" style="margin-bottom:2px">${esc(money(c.nca))}</div>
+      <div class="muted" style="font-size:13px;margin-bottom:14px">${esc(FIG[2])} ${esc(money(c.nl, { round: true }))} less allocations ${esc(money(c.allocTotal, { round: true }))}</div>
+    </button>
+    <div class="stats">
+      <button data-nl="1" style="text-align:left"><div class="label">${esc(FIG[2])}</div><div class="v ${c.nl < 0 ? 'neg' : ''}">${esc(money(c.nl, { round: true }))}</div>
+        <div class="s muted" style="font-size:12.5px">${bs.net ? esc((c.nl / bs.net * 100).toFixed(1)) + '% of ' + esc(lc(FIG[4])) : ''}</div></button>
+      <div><div class="label">${esc(monthName)} spending</div><div class="v">${esc(money(x.monthTotal, { round: true }))}</div></div>
+      <div><div class="label">${esc(LN[8].label)} owed</div><div class="v">${esc(money(cardsOwed, { round: true }))}</div></div>
+      <div><div class="label">${esc(FIG[4])}</div><div class="v">${esc(money(bs.net, { round: true }))}</div></div>
+    </div>
+  </div>`;
+
+  html += allocCardHTML(dash);
+
+  const nd = x.diffs.length;
+  html += nd
+    ? `<details class="card" data-key="__recon" ${prefs.closed.__recon ? '' : 'open'}><summary><span class="grow"><span class="flag">${nd} ${nd === 1 ? 'account differs' : 'accounts differ'}</span> from the ${esc(SHEET[3])}</span>${chev()}</summary>
+       ${x.diffs.map(d => `<div class="diffrow"><b>${esc(d.name)}</b><div class="muted">Log ${esc(money(d.app))} · ${esc(SHEET[3])} ${esc(money(d.sheet))} · off by ${esc(money(d.diff))}</div></div>`).join('')}
+       <div class="diffrow muted" style="font-size:13px">The app computes each account as its Destination total minus its Source total over every row, the same rule your ${esc(SHEET[3])} cells use. A gap means that ${esc(SHEET[3])} cell applies a different rule or range.</div></details>`
+    : `<div class="recon"><i></i>All ${x.checked} ${esc(SHEET[3])} accounts match the log (${rows.length.toLocaleString()} rows).</div>`;
+
+  html += `<div class="sectiontitle">Balance sheet · as of ${esc(dayLabel(isoDay(0)).toLowerCase())}</div>
+    <div class="card bs"><div class="bshead">Assets</div>${bs.assets.map(bsGroup).join('')}
+      <div class="bstotal"><span>Total assets</span><span class="num">${esc(money(bs.ta))}</span></div></div>
+    <div class="card bs"><div class="bshead">Liabilities</div>${bs.liabilities.map(bsGroup).join('')}
+      <div class="bstotal"><span>Total liabilities</span><span class="num">${esc(money(bs.tl))}</span></div></div>
+    <div class="card bs"><div class="bstotal net"><span>${esc(FIG[4])}</span><span class="num">${esc(money(bs.net))}</span></div>
+      <div class="bsnote" style="padding-bottom:12px">${netOff ? `<span class="flag">${esc(SHEET[3])} shows ${esc(money(sheetNet))}.</span> ` : sheetNet != null ? `Matches the ${esc(SHEET[3])}. ` : ''}Total assets less total liabilities${x.pend.length ? ', including entries queued on ' + here() : ''}.</div></div>`;
+
+  html += `<div class="sectiontitle">Memo</div><div class="card bs">
+    ${bs.others.length ? bsGroup({ key: 'others', label: 'Other accounts in the log', total: r2(bs.others.reduce((a, it) => a + it.value, 0)), items: bs.others }) : ''}
+    </div>
+    <p class="hint">${esc(TAB[2])} are computed on ${here()} from the log, in your ${esc(SHEET[3])}’s structure. ${esc(LN[3].label)} comes from the ${esc(SHEET[3])}; ${esc(lc(LN[9].label))} are kept by this app and written to the ${esc(SHEET[3])}. Tap an account or person to see their rows.</p>`;
+  el.innerHTML = html;
+}
+
+/* ---------- the cascade ----------
+   Figure 1 = line 1 net of maintaining balances + line 3 + line 2 + line 4
+   Figure 2 = figure 1 − line 3 − the payable (line 10) − line 8 owed
+   Figure 3 = figure 2 − the allocations (line 9, without the payable) */
+const groupItems = (dash, re) => (dash.groups || []).filter(g => re.test(g.label)).flatMap(g => g.items);
+/** Line 1 value after its maintaining balance, the summary tab's rule: excess over the earmark, the tolerance or less shown as 0. */
+const walletNet = (raw, e) => (raw - e > TOL ? raw - e : 0);
+/** The payable from the log (a credit-normal account); falls back to the summary tab if the log never touches it, and to 0 without a payable account. */
+function apAmount(dash, src) {
+  if (!AP_NAME) return 0;
+  const v = (src || derived().live)[AP_NAME];
+  if (v !== undefined) return r2(-v);
+  const it = groupItems(dash, LN[9].re).find(x => LN[10].re.test(x.name)); return it ? it.value : 0;
+}
+const allocItems = dash => groupItems(dash, LN[9].re).filter(it => !LN[10].re.test(it.name));
+function cascade(dash) {
+  const em = earmarkMap(dash); const sum = xs => r2(xs.reduce((a, b) => a + b, 0));
+  const walletRows = groupItems(dash, LN[1].re).map(it => { const n = clean(it.name), raw = bal(n), e = em[n] || 0; return { name: n, raw, e, net: walletNet(raw, e) }; });
+  const wallets = sum(walletRows.map(w => w.net));
+  const restricted = sum(groupItems(dash, LN[3].re).map(it => it.value));
+  const savings = sum(groupItems(dash, LN[2].re).map(it => bal(it.name)));
+  const sti = sum(groupItems(dash, LN[4].re).map(it => bal(it.name)));
+  const cards = sum(groupItems(dash, LN[8].re).map(it => -bal(it.name)));   // amount owed, positive
+  const ap = apAmount(dash);
+  const liquid = r2(wallets + restricted + savings + sti);
+  const nl = r2(liquid - restricted - ap - cards);
+  const alloc = allocLines(dash).filter(a => a.on); const allocTotal = sum(alloc.map(a => a.amount));
+  return { walletRows, wallets, restricted, savings, sti, cards, ap, liquid, nl, allocs: alloc, allocTotal, nca: r2(nl - allocTotal) };
+}
+function cascadeRows(c, indent) {
+  const kv = (l, v, sub) => `<div class="kv"><span${sub ? ' style="padding-left:12px"' : ''}>${l}</span><span class="num">${esc(money(v))}</span></div>`;
+  return kv(esc(LN[1].label) + ', net of maintaining balances', c.wallets, 1) + kv(esc(LN[3].label), c.restricted, 1) + kv(esc(LN[2].label), c.savings, 1) + kv(esc(LN[4].label), c.sti, 1)
+    + kv('<b>' + esc(FIG[1]) + '</b>', c.liquid) + kv('Less ' + esc(lc(LN[3].label)), -c.restricted, 1) + (AP_NAME ? kv('Less ' + esc(lc(LN[10].label)), -c.ap, 1) : '') + kv('Less ' + esc(lc(LN[8].label)) + ' owed', -c.cards, 1)
+    + kv('<b>' + esc(FIG[2]) + '</b>', c.nl);
+}
+function openNetCash() {
+  const c = cascade(snap.dashboard);
+  openSheet(`<h2>${esc(FIG[3])}</h2><p>${esc(FIG[2])} less ${esc(lc(LN[9].label))}.${AP_NAME ? ` ${esc(LN[10].label)} is already deducted in ${esc(lc(FIG[2]))}, so allocations leave it out.` : ''}</p>
+    <div class="kv"><span>${esc(FIG[2])}</span><span class="num">${esc(money(c.nl))}</span></div>
+    ${c.allocs.map(a => `<div class="kv"><span style="padding-left:12px">Less ${esc(a.name)}</span><span class="num">${esc(money(-a.amount))}</span></div>`).join('')}
+    <div class="kv"><span><b>${esc(FIG[3])}</b></span><span class="num"><b>${esc(money(c.nca))}</b></span></div>
+    <div class="btns"><button class="secondary" id="sNL">${esc(FIG[2])} breakdown</button><button class="secondary" id="closeS">Close</button></div>`);
+  $('#sNL').onclick = openNetLiquidity;
+  $('#closeS').onclick = closeSheet;
+}
+function openNetLiquidity() {
+  const c = cascade(snap.dashboard);
+  openSheet(`<h2>${esc(FIG[2])}</h2><p>${esc(FIG[1])} less ${esc(lc(LN[3].label))}${AP_NAME ? ', ' + esc(lc(LN[10].label)) : ''} and ${esc(lc(LN[8].label))} owed. ${esc(LN[3].label)} is the maintaining balances, from the ${esc(SHEET[3])}; everything else comes from the log.</p>
+    ${cascadeRows(c)}
+    <div class="btns"><button class="secondary" id="closeS">Close</button></div>`);
+  $('#closeS').onclick = closeSheet;
+}
+
+/* ---------- allocations (line 9) ----------
+   The app keeps one line per allocation; the sheet has ALLOC_SLOTS cells for them (the Config tab's allocation range,
+   under the payable row of the summary tab). Allocations are spread evenly across the slots in order: names joined
+   with ", " in the name cell, amounts joined with "+" in the amount formula, an excluded amount written as (N*0). */
+const ALLOC_SLOTS = 4;
+let allocs = store.get(LS.allocs, { items: null, pending: false, supported: null });
+const saveAllocs = () => { store.set(LS.allocs, allocs); dirty(); };
+/** Split N items into ALLOC_SLOTS contiguous groups whose sizes differ by at most one, larger groups first. */
+function packAllocs(items) {
+  const base = Math.floor(items.length / ALLOC_SLOTS), extra = items.length % ALLOC_SLOTS; const out = []; let i = 0;
+  for (let k = 0; k < ALLOC_SLOTS; k++) { const n = base + (k < extra ? 1 : 0); out.push(items.slice(i, i + n).map(({ name, amount, on }) => ({ name, amount, on }))); i += n; }
+  return out;
+}
+/** Read one sheet slot back into allocation lines. */
+function parseAllocSlot(slot) {
+  const names = String(slot.name || '').split(',').map(clean).filter(Boolean);
+  if (!names.length) return [];
+  const f = String(slot.formula || '').replace(/\s/g, '');
+  if (f.startsWith('=')) {
+    const terms = f.slice(1).split('+').map(t => {
+      let m = /^\((\d+(?:\.\d+)?)\*0\)$|^\(?(\d+(?:\.\d+)?)\)?\*0$/.exec(t); if (m) return { amount: +(m[1] || m[2]), on: false };
+      m = /^\(?(\d+(?:\.\d+)?)\)?$/.exec(t); return m ? { amount: +m[1], on: true } : null;
+    });
+    if (terms.every(Boolean)) {
+      if (terms.length === names.length) return names.map((n, i) => ({ name: n, ...terms[i] }));
+      if (names.length === 1) return [{ name: names[0], amount: terms.reduce((a, t) => a + (t.on ? t.amount : 0), 0), on: true }];
+    }
+  } else if (names.length === 1) return [{ name: names[0], amount: Number(slot.value) || 0, on: true }];
+  return [{ name: names.join(' / '), amount: Number(slot.value) || 0, on: true }];   // unreadable: keep the cell's value as one line
+}
+const allocsFromSlots = slots => slots.flatMap(parseAllocSlot).map(a => ({ id: uid(), ...a }));
+/** Allocation lines in effect: the app's own list once read from the sheet, else the summary tab's values. */
+function allocLines(dash) {
+  if (allocs.items) return allocs.items;
+  return allocItems(dash).map(it => ({ id: clean(it.name), name: clean(it.name), amount: it.value, on: true, legacy: true }));
+}
+async function syncAllocs() {
+  if (!cfg) return;
+  try {
+    const slots = allocs.pending && allocs.items ? await api('setAllocs', { slots: packAllocs(allocs.items) }) : await api('getAllocs');
+    allocs.items = allocsFromSlots(slots); allocs.pending = false; allocs.supported = true; saveAllocs();
+  } catch (e) {
+    if (!e.network && !e.auth) { allocs.supported = false; saveAllocs(); }   // the sheet's script doesn't know these actions yet
+    else throw e;
+  }
+}
+function editAlloc(id) {
+  const lines = allocLines(snap.dashboard); const a = lines.find(x => x.id === id) || { id: null, name: '', amount: '', on: true };
+  openSheet(`<h2>${a.id ? 'Edit allocation' : 'New allocation'}</h2>
+    <label class="label" for="aName">Name</label><input class="txt" id="aName" value="${esc(a.name)}" autocomplete="off" maxlength="60">
+    <label class="label" for="aAmt">Amount</label><input class="txt" id="aAmt" inputmode="numeric" value="${esc(a.amount === '' ? '' : String(a.amount))}" autocomplete="off">
+    <label class="brow" style="border:0"><input type="checkbox" id="aOn" ${a.on ? 'checked' : ''}><div class="grow"><div class="t">Include in ${esc(FIG.short3)}</div><div class="s">Off keeps the amount but leaves it out of the total</div></div></label>
+    <div class="btns"><button class="primary" id="aSave">Save</button>${a.id ? '<button class="secondary" id="aDel" style="color:var(--neg)">Remove</button>' : ''}<button class="secondary" id="closeS">Cancel</button></div>`);
+  const commit = items => { allocs.items = items; allocs.pending = true; saveAllocs(); closeSheet(); renderAll(); if (navigator.onLine) syncAllocs().then(renderAll).catch(onError); };
+  $('#aSave').onclick = () => {
+    const name = clean($('#aName').value).replace(/\s+/g, ' '); const amount = Number(unmoney($('#aAmt').value));
+    if (!name) { toast('Add a name', 'err'); return; }
+    if (/[,+]/.test(name)) { toast('Names can’t contain a comma or a plus sign', 'err'); return; }
+    if (!Number.isInteger(amount) || amount < 0) { toast('Amount must be a whole number', 'err'); return; }
+    const items = lines.map(x => ({ id: x.id, name: x.name, amount: x.amount, on: x.on }));
+    if (a.id) Object.assign(items.find(x => x.id === a.id), { name, amount, on: $('#aOn').checked });
+    else items.push({ id: uid(), name, amount, on: $('#aOn').checked });
+    commit(items);
+  };
+  if (a.id) $('#aDel').onclick = () => { if (confirm(`Remove ${a.name}?`)) commit(lines.filter(x => x.id !== a.id).map(x => ({ id: x.id, name: x.name, amount: x.amount, on: x.on }))); };
+  $('#closeS').onclick = closeSheet;
+}
+function allocCardHTML(dash) {
+  const lines = allocLines(dash); const canEdit = allocs.supported === true && !!allocs.items;
+  const rowsHTML = lines.map(a => `<button class="row" ${canEdit ? `data-alloc="${esc(a.id)}"` : ''}><div class="grow"><div class="t" style="${a.on ? '' : 'color:var(--muted)'}">${esc(a.name)}</div>
+      ${a.on ? '' : '<div class="s">Not included</div>'}</div><div class="v ${a.on ? '' : 'tr'}" style="${a.on ? '' : 'color:var(--muted);font-weight:500'}">${esc(money(a.amount))}</div></button>`).join('');
+  const note = allocs.pending ? `<span class="pending">Waiting to reach the sheet</span>` : allocs.supported === false ? `<span class="faint" style="font-size:12.5px">Editing needs the sheet script update. Showing the ${esc(SHEET[3])}’s values.</span>` : !canEdit ? `<span class="faint" style="font-size:12.5px">Sync once to edit</span>` : '';
+  return `<div class="sectiontitle">${esc(LN[9].label)}</div><div class="card">${rowsHTML || '<div class="row"><div class="grow muted">No allocations</div></div>'}
+    ${canEdit ? `<button class="row" data-alloc="__new" style="color:var(--accent);font-weight:600">+ Add allocation</button>` : ''}</div>
+    ${note ? `<p class="hint" style="margin-top:-4px">${note}</p>` : ''}`;
+}
+
+/* ---------- reports (tab 1) ---------- */
+const fmtK = n => { const a = Math.abs(n); const b = a >= 1e6 ? (a / 1e6).toFixed(a >= 1e7 ? 0 : 1) + 'M' : a >= 1e3 ? (a / 1e3).toFixed(a >= 1e4 ? 0 : 1) + 'k' : a.toFixed(0); return n < -0.004 ? `(${CUR}${b})` : `${CUR}${b}`; };
+function monthKeys(n, skipCurrent) {
+  const out = []; const now = new Date();
+  for (let i = n - (skipCurrent ? 0 : 1); i >= (skipCurrent ? 1 : 0); i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+  }
+  return out;
+}
+const monLabel = (ym, long) => new Date(+ym.slice(0, 4), +ym.slice(5) - 1, 1).toLocaleDateString('en-US', long ? { month: 'long', year: 'numeric' } : { month: 'short' });
+let R = null;
+function reportData() {
+  if (R && R.D === derived()) return R;
+  const x = derived(); const flow = {}; const all = rows.concat(x.pend);
+  // Accrued income on a receivable that is fully provided for is booked as an inflow-type row from the accrued-income account plus
+  // an equal outflow-type row from the provisioned account to the allowance (same description, date and amount; Config tab). No cash
+  // moves, so the income half is left out of inflows. Recovered amounts are logged as ordinary income and still count.
+  const pairKey = r => `${clean(r.desc).toLowerCase()}|${r.date}|${Math.round((Number(r.amount) || 0) * 100)}`;
+  const provided = {};
+  all.forEach(r => { if (isT(r.type, 'out') && clean(r.source) === PROVISIONED && clean(r.dest) === BAD_DEBTS) provided[pairKey(r)] = (provided[pairKey(r)] || 0) + 1; });
+  all.forEach(r => {
+    const m = String(r.date).slice(0, 7), a = Number(r.amount) || 0;
+    const f = flow[m] || (flow[m] = { in: 0, out: 0, cats: {}, srcs: {} });
+    if (isT(r.type, 'in') && !INFLOW_EXCLUDE.has(clean(r.source))) {
+      if (clean(r.source) === ACCRUED && provided[pairKey(r)]) { provided[pairKey(r)]--; return; }
+      f.in += a; f.srcs[clean(r.source)] = (f.srcs[clean(r.source)] || 0) + a;
+    }
+    else if (isT(r.type, 'out') && clean(r.dest) !== BAD_DEBTS && !x.accounts.has(clean(r.dest))) { f.out += a; f.cats[clean(r.dest)] = (f.cats[clean(r.dest)] || 0) + a; }
+  });
+  const get = m => flow[m] || { in: 0, out: 0, cats: {}, srcs: {} };
+  // category averages over complete months, like the summary tab's 3/6/12-month averages
+  const avg = n => { const ms = monthKeys(n, true); const c = {}; ms.forEach(m => Object.entries(get(m).cats).forEach(([k, v]) => c[k] = (c[k] || 0) + v)); Object.keys(c).forEach(k => c[k] /= n); return c; };
+  R = { D: x, get, avg: { 3: avg(3), 6: avg(6), 12: avg(12), 18: avg(18) } };
+  return R;
+}
+/** Collections, disbursements and the figure 2 line from one pass over the log, so they reconcile by construction.
+ *  The pool is every account money can be spent from (the pairs tab's outflow-type sources and the summary tab's
+ *  lines 1, 2, 4 and 8), plus the payable. Lines 5, 6 and 7, the receivable accounts and the allowance are outside it.
+ *  Each account counts at its exact log balance, except maintaining balances: an account whose earmark equals its
+ *  whole balance today is fully restricted on every day, and any other earmark is a cap, so only the excess counts.
+ *  A row's effect is the pool's value after it less before: income into the pool is a collection; spending from an
+ *  account, a card or a payable is a disbursement; money sent to an account outside the pool and money moved into a
+ *  maintaining balance are disbursements, and the reverse moves are collections; accruals and transfers inside the
+ *  pool are zero. Rows dated after today are left out of both. */
+/* Cash flow disbursement groups come from the Config tab (applyConf). A category name is matched exactly first, then by
+ * pattern; anything unmatched is Other. */
+/** kind: 'reserve' for a maintaining-balance move, 'asset' when the money went to an account outside the pool
+ *  (receivables, investments, ventures), otherwise 'spend'. */
+function cfGroupOf(label, kind) {
+  if (kind === 'reserve') return CF_RES;
+  const n = String(label).toLowerCase();
+  if (CF_BY_NAME[n]) return CF_BY_NAME[n];
+  if (kind === 'asset') return CF_RES;
+  const g = CF_GROUPS.find(x => x.re && x.re.test(label));
+  return g ? g.k : 'other';
+}
+const cfEmpty = () => ({ in: 0, out: 0, srcs: {}, cats: {}, g: {}, gc: {}, gb: {}, big: [], bigSum: 0 });
+let LQ = null;
+function liqLedger(start) {
+  const x = derived();
+  if (LQ && LQ.D === x && LQ.start === start) return LQ;
+  const dash = snap.dashboard; const em = earmarkMap(dash);
+  const outside = new Set([...NOT_POOL, ...groupItems(dash, LN[5].re).map(it => clean(it.name)), ...groupItems(dash, LN[7].re).map(it => clean(it.name)), ...groupItems(dash, LN[6].re).map(it => clean(it.name))]);
+  const pool = new Set(AP_NAME ? [AP_NAME] : []);
+  Object.keys(typeMap(TY.out)).map(clean).forEach(n => { if (n && !outside.has(n)) pool.add(n); });
+  [LN[1].re, LN[2].re, LN[4].re, LN[8].re].forEach(re => groupItems(dash, re).forEach(it => { const n = clean(it.name); if (!outside.has(n)) pool.add(n); }));
+  const caps = {};
+  Object.keys(em).forEach(n => { if (pool.has(n) && em[n]) caps[n] = Math.abs(bal(n) - em[n]) <= TOL ? 'full' : em[n]; });
+  const tracked = n => pool.has(n);
+  const worth = (n, raw) => !pool.has(n) ? 0 : caps[n] === 'full' ? 0 : caps[n] ? Math.max(raw - caps[n], 0) : raw;
+  const today = isoDay(0); const run = {}; const dayDelta = {}; const flow = {}; let futureDelta = 0;
+  const all = rows.map((r, i) => [r, i]).concat(x.pend.map((r, i) => [r, rows.length + i]))
+    .sort((p, q) => p[0].date < q[0].date ? -1 : p[0].date > q[0].date ? 1 : p[1] - q[1]).map(p => p[0]);
+  const add = (o, k, v) => o[k] = (o[k] || 0) + v;
+  all.forEach(r => {
+    const sc = clean(r.source), d = clean(r.dest), a = Number(r.amount) || 0;
+    if (!tracked(sc) && !tracked(d)) return;
+    const names = sc === d ? [sc] : [sc, d];
+    const before = names.reduce((v, n) => v + worth(n, run[n] || 0), 0);
+    run[d] = (run[d] || 0) + a; run[sc] = (run[sc] || 0) - a;
+    const delta = r2(names.reduce((v, n) => v + worth(n, run[n] || 0), 0) - before);
+    if (r.date > today) { futureDelta += delta; return; }
+    if (r.date < start || Math.abs(delta) < 0.005) return;
+    add(dayDelta, r.date, delta);
+    const m = r.date.slice(0, 7), f = flow[m] || (flow[m] = cfEmpty());
+    const capped = caps[sc] ? sc : caps[d] ? d : null;
+    const one = tracked(d) && !tracked(sc) ? sc : tracked(sc) && !tracked(d) ? d : null;
+    const label = one || `${capped || 'Maintaining'} balance`;
+    if (delta > 0) { f.in += delta; add(f.srcs, label, delta); return; }
+    const amt = -delta; f.out += amt; add(f.cats, label, amt);
+    const g = cfGroupOf(label, one ? (x.accounts.has(one) ? 'asset' : 'spend') : 'reserve');
+    if (CF_BIG > 0 && amt > CF_BIG) { f.big.push({ cat: label, desc: clean(r.desc), amt, g, date: r.date }); f.bigSum += amt; add(f.gb, g, amt); }
+    else { add(f.g, g, amt); const gc = f.gc[g] || (f.gc[g] = {}); add(gc, label, amt); }
+  });
+  // today's value less the in-window and future effects gives the value at the window start
+  let v = 0; for (const n in run) v += worth(n, run[n]);
+  v = r2(v - futureDelta - Object.values(dayDelta).reduce((s2, z) => s2 + z, 0));
+  const base = v; const pts = []; const days = Math.round((parseISO(today) - parseISO(start)) / 864e5) + 1;
+  for (let k = days - 1; k >= 0; k--) { const day = isoDay(-k); v = r2(v + (dayDelta[day] || 0)); pts.push({ day, v }); }
+  const get = m => flow[m] || cfEmpty();
+  LQ = { D: x, start, base, pts, get, futureDelta: r2(futureDelta) };
+  return LQ;
+}
+function netLiqTodayHTML(L) {
+  const c = cascade(snap.dashboard); const lastV = L.pts[L.pts.length - 1].v; const gap = r2(c.nl - lastV - L.futureDelta);
+  return `<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px"><b style="font-size:14.5px">Today, from ${esc(TAB[2])}</b>
+    <div class="kvs"><span>${esc(FIG[1])}</span><span class="num">${esc(money(c.liquid))}</span></div>
+    <div class="kvs sub"><span>Less ${esc(lc(LN[3].label))}</span><span class="num">${esc(money(-c.restricted))}</span></div>
+    ${AP_NAME ? `<div class="kvs sub"><span>Less ${esc(lc(LN[10].label))}</span><span class="num">${esc(money(-c.ap))}</span></div>` : ''}
+    <div class="kvs sub"><span>Less ${esc(lc(LN[8].label))} owed</span><span class="num">${esc(money(-c.cards))}</span></div>
+    <div class="kvs"><span><b>${esc(FIG[2])}</b></span><span class="num"><b>${esc(money(c.nl))}</b></span></div>
+    ${Math.abs(L.futureDelta) >= 0.005 ? `<div class="faint" style="font-size:12px;margin-top:4px">Includes ${esc(money(L.futureDelta, { plus: true }))} from entries dated after today, which the charts leave off.</div>` : ''}
+    ${Math.abs(gap) > TOL ? `<div class="faint" style="font-size:12px;margin-top:4px">The chart reads ${esc(money(lastV))}: it counts every account at its exact log balance, including negatives and accounts not on the ${esc(SHEET[3])}, so it differs from ${esc(TAB[2])} by ${esc(money(gap))}.</div>` : ''}</div>`;
+}
+/** Average monthly net effect for each calendar quarter in the window (months in the window only; the current one so far). */
+function quarterAverages(months, get) {
+  const q = {}; const order = [];
+  months.forEach(m => { const k = `Q${Math.floor((+m.slice(5) - 1) / 3) + 1} ${m.slice(0, 4)}`; if (!q[k]) { q[k] = { sum: 0, n: 0, cur: false }; order.push(k); } const f = get(m); q[k].sum += f.in - f.out; q[k].n++; if (m === x_ym()) q[k].cur = true; });
+  return order.map(k => ({ label: k + (q[k].cur ? ' (so far)' : ''), avg: q[k].sum / q[k].n }));
+}
+const CF_W = 340, CF_H = 170, CF_PB = 20, CF_PT = 14;
+const cfOut = (f, adj) => adj ? f.out - f.bigSum : f.out;
+/** Cash flow bars. opt.view 'all' pairs collections with disbursements; 'out' shows disbursements alone, wider.
+ *  Disbursements stack by group in CF_GROUPS order; rows over CF_BIG sit on top, hatched, unless opt.adj leaves them out. */
+function barSVG(months, get, sel, opt) {
+  const W = CF_W, H = CF_H, pb = CF_PB, pt = CF_PT, n = months.length, cw = W / n;
+  const both = opt.view !== 'out', adj = opt.adj === 'adjusted';
+  const bw = both ? Math.min(13, cw * 0.3) : Math.min(28, cw * 0.56);
+  const max = Math.max(1, ...months.map(m => { const f = get(m); return Math.max(both ? f.in : 0, cfOut(f, adj)); }));
+  const ph = H - pt - pb, hOf = v => ph * v / max, base = H - pb;
+  let s = `<defs><pattern id="cfHatch" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="1.7" height="4" fill="var(--card)"/></pattern></defs>`;
+  months.forEach((m, i) => {
+    const cx = cw * i + cw / 2, f = get(m);
+    const showLbl = n <= 12 || (n - 1 - i) % 2 === 0 || sel === m;
+    const ox = both ? cx + 1 : cx - bw / 2;
+    let stack = '', y0 = base;
+    const seg = (g, v, hatched) => {
+      const h = hOf(v); if (h < 0.3) return; const gap = h > 3 ? 1 : 0; const c = CF_G[g].c;
+      stack += hatched
+        ? `<rect data-g="${g}" data-b="1" x="${ox}" y="${y0 - h}" width="${bw}" height="${h - gap}" rx="1.5" fill="${c}" opacity=".55"/><rect data-g="${g}" data-b="1" x="${ox}" y="${y0 - h}" width="${bw}" height="${h - gap}" rx="1.5" fill="url(#cfHatch)"/>`
+        : `<rect data-g="${g}" x="${ox}" y="${y0 - h}" width="${bw}" height="${h - gap}" rx="1.5" fill="${c}"/>`;
+      y0 -= h;
+    };
+    CF_GROUPS.forEach(g => { if (f.g[g.k]) seg(g.k, f.g[g.k], false); });
+    if (!adj) CF_GROUPS.forEach(g => { if (f.gb[g.k]) seg(g.k, f.gb[g.k], true); });
+    s += `<g data-m="${m}" style="cursor:pointer"><rect x="${cw * i + 1}" y="${pt + 2}" width="${cw - 2}" height="${H - pt - 2}" rx="6" fill="${sel === m ? 'var(--chip)' : 'transparent'}"/>
+      ${both ? `<rect data-c="1" x="${cx - bw - 1}" y="${base - hOf(f.in)}" width="${bw}" height="${Math.max(0, hOf(f.in))}" rx="2" fill="var(--in)"/>` : ''}${stack}
+      ${showLbl ? `<text x="${cx}" y="${H - 6}" text-anchor="middle" font-size="10" fill="${sel === m ? 'var(--ink)' : 'var(--muted)'}">${monLabel(m)}</text>` : ''}</g>`;
+  });
+  s += `<line x1="0" x2="${W}" y1="${pt}" y2="${pt}" stroke="var(--line)" stroke-dasharray="3 3" pointer-events="none"/><text x="${W}" y="${pt - 4}" text-anchor="end" font-size="10" fill="var(--faint)" pointer-events="none">${fmtK(max)}</text>`;
+  return `<svg id="cfSvg" viewBox="0 0 ${W} ${H}" width="100%" style="display:block;overflow:visible;touch-action:pan-y">${s}<line x1="0" x2="${W}" y1="${H - pb}" y2="${H - pb}" stroke="var(--line)"/></svg>`;
+}
+/** Groups with spending under the CF_BIG line in a month, largest first. */
+const cfGroupsIn = f => CF_GROUPS.filter(g => f.g[g.k] > 0.004).map(g => [g, f.g[g.k]]).sort((a, b) => b[1] - a[1]);
+const cfBigSorted = f => f.big.slice().sort((a, b) => b.amt - a.amt);
+/** Hover / long-press card for one month. hg is the group under the pointer, which is expanded into its categories. */
+function cfTipHTML(m, f, hg, opt) {
+  const both = opt.view !== 'out', adj = opt.adj === 'adjusted';
+  const sw = g => `<i style="background:${CF_G[g].c}"></i>`;
+  let h = `<div style="font-weight:650;font-size:13.5px;margin-bottom:4px">${esc(monLabel(m, true))}${m === x_ym() ? ' (so far)' : ''}</div>`;
+  if (both) h += `<div class="r"><span class="g"><i style="background:var(--in)"></i>Collections</span><span>${esc(money(f.in))}</span></div>`;
+  h += `<div class="r"><span>Disbursements</span><span>${esc(money(f.out))}</span></div>`;
+  if (f.bigSum) h += `<div class="r"><span>Adjusted, without rows over ${esc(fmtK(CF_BIG))}</span><span>${esc(money(f.out - f.bigSum))}</span></div>`;
+  const gs = cfGroupsIn(f);
+  if (gs.length) h += `<div class="hd">By group</div>`;
+  gs.forEach(([g, v]) => {
+    const on = hg === g.k, dim = hg && !on;
+    h += `<div class="r${dim ? ' dim' : ''}"><span class="g">${sw(g.k)}${on ? `<b>${esc(g.name)}</b>` : esc(g.name)}</span><span>${esc(money(v))}</span></div>`;
+    if (on) Object.entries(f.gc[g.k] || {}).sort((a, b) => b[1] - a[1]).forEach(([c, a]) => { h += `<div class="r sub"><span>${esc(c)}</span><span>${esc(money(a))}</span></div>`; });
+  });
+  const big = cfBigSorted(f);
+  if (big.length) {
+    h += `<div class="hd">Over ${esc(fmtK(CF_BIG))}${adj ? ', left out' : ', hatched'}</div>`;
+    big.slice(0, 6).forEach(b => { const dim = hg && hg !== b.g; h += `<div class="r big${dim ? ' dim' : ''}"><span class="g">${sw(b.g)}<span><b>${esc(b.cat)}</b> · ${esc(b.desc || '(no description)')}</span></span><span>${esc(money(b.amt))}</span></div>`; });
+    if (big.length > 6) h += `<div class="r big"><span>${big.length - 6} more</span><span>${esc(money(big.slice(6).reduce((a, b) => a + b.amt, 0)))}</span></div>`;
+  }
+  if (!gs.length && !big.length && !both) h += `<div class="muted">No disbursements.</div>`;
+  return h;
+}
+/** Hover with a mouse or pen; long-press (and slide) with a finger. A long-press keeps the card up after lifting and
+ *  swallows the tap, so it doesn't also select the month; the next touch elsewhere closes it. */
+function wireCF(months, get, opt) {
+  const wrap = $('#cfWrap'), svg = $('#cfSvg'); if (!wrap || !svg) return;
+  let tip = null, timer = null, held = false, sx = 0, sy = 0;
+  const hide = () => { if (tip) { tip.remove(); tip = null; } };
+  const show = (cx, cy, target, touch) => {
+    const r = svg.getBoundingClientRect(); if (!r.width) return;
+    const i = Math.max(0, Math.min(months.length - 1, Math.floor((cx - r.left) / r.width * months.length)));
+    const m = months[i], seg = target && target.closest && target.closest('[data-g]');
+    if (!tip) { tip = document.createElement('div'); tip.className = 'cftip'; wrap.appendChild(tip); }
+    tip.innerHTML = cfTipHTML(m, get(m), seg ? seg.dataset.g : null, opt);
+    const wr = wrap.getBoundingClientRect(), tw = tip.offsetWidth, th = tip.offsetHeight;
+    const colX = r.left - wr.left + (i + 0.5) * r.width / months.length;
+    let left, top;
+    if (touch) {
+      left = Math.max(-4, Math.min(wr.width - tw + 4, colX - tw / 2));
+      top = wr.top - th - 10 > 8 ? -th - 10 : wr.height + 10; // above the chart, below it if there's no room
+    } else {
+      const px = cx - wr.left; left = px + 16 + tw > wr.width + 8 ? px - tw - 16 : px + 16;
+      top = Math.max(-th + 40, Math.min(cy - wr.top - 20, wr.height - 30));
+      if (wr.top + top < 8) top = 8 - wr.top;
+    }
+    tip.style.left = left + 'px'; tip.style.top = top + 'px';
+  };
+  svg.addEventListener('pointermove', e => { if (e.pointerType !== 'touch') show(e.clientX, e.clientY, e.target, false); });
+  svg.addEventListener('pointerleave', e => { if (e.pointerType !== 'touch') hide(); });
+  svg.addEventListener('touchstart', e => {
+    const t = e.touches[0]; sx = t.clientX; sy = t.clientY; held = false; clearTimeout(timer); hide();
+    timer = setTimeout(() => { held = true; show(sx, sy, document.elementFromPoint(sx, sy), true); }, 420);
+  }, { passive: true });
+  svg.addEventListener('touchmove', e => {
+    const t = e.touches[0];
+    if (!held) { if (Math.hypot(t.clientX - sx, t.clientY - sy) > 10) clearTimeout(timer); return; }
+    e.preventDefault(); show(t.clientX, t.clientY, document.elementFromPoint(t.clientX, t.clientY), true);
+  }, { passive: false });
+  svg.addEventListener('touchend', e => { clearTimeout(timer); if (held) { e.preventDefault(); held = false; } });
+  svg.addEventListener('touchcancel', () => { clearTimeout(timer); held = false; });
+  svg.addEventListener('contextmenu', e => e.preventDefault());
+  state.cfHide = hide;
+}
+document.addEventListener('touchstart', e => { if (state.cfHide && !e.target.closest('#cfSvg')) state.cfHide(); }, { passive: true });
+window.addEventListener('scroll', () => state.cfHide && state.cfHide(), { passive: true, capture: true });
+function lineSVG(pts) {
+  const W = 340, H = 150, pt = 10, pb = 18;
+  const vs = pts.map(p => p.v); let mn = Math.min(...vs), mx = Math.max(...vs); if (mx - mn < 1) { mx += 1; mn -= 1; }
+  const X = i => W * i / Math.max(1, pts.length - 1), Y = v => pt + (H - pt - pb) * (1 - (v - mn) / (mx - mn));
+  const d = pts.map((p, i) => (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(p.v).toFixed(1)).join('');
+  const zero = mn < 0 && mx > 0 ? `<line x1="0" x2="${W}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--neg)" stroke-dasharray="3 3" opacity=".6"/>` : '';
+  const last = pts.length - 1;
+  return `<svg id="lnSvg" viewBox="0 0 ${W} ${H}" width="100%" style="display:block;overflow:visible;touch-action:pan-y">
+    <path d="${d}L${W} ${H - pb}L0 ${H - pb}Z" fill="var(--accent)" opacity=".12"/>${zero}
+    <path d="${d}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/>
+    <line id="lnCur" x1="${X(last)}" x2="${X(last)}" y1="${pt}" y2="${H - pb}" stroke="var(--faint)" stroke-width="1"/>
+    <circle id="lnDot" cx="${X(last)}" cy="${Y(pts[last].v)}" r="4" fill="var(--accent)" stroke="var(--card)" stroke-width="2"/>
+    <text x="0" y="${H - 4}" font-size="10" fill="var(--muted)">${esc(shortISO(pts[0].day))}</text>
+    <text x="${W}" y="${H - 4}" font-size="10" fill="var(--muted)" text-anchor="end">Today</text>
+    <text x="0" y="${pt - 2}" font-size="10" fill="var(--faint)">${fmtK(mx)}</text></svg>`;
+}
+const shortISO = s => { const d = parseISO(s); return d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : s; };
+function hbars(entries, max, fmt) {
+  return entries.map(([n, v, sub]) => `<div style="margin-top:12px"><div style="display:flex;justify-content:space-between;gap:10px;font-size:14.5px"><span>${esc(n)}</span><span class="num">${esc(fmt(v))}</span></div>
+    ${sub ? `<div class="s muted" style="font-size:12px">${esc(sub)}</div>` : ''}<div class="bar"><i style="width:${Math.max(1, v / max * 100).toFixed(1)}%"></i></div></div>`).join('');
+}
+const REP_SPANS = [3, 6, 12, 18];
+function renderReports() {
+  const el = $('#v-rep');
+  if (!snap || !rows.length) { el.innerHTML = `<div class="empty">${esc(TAB[1])} appear after the first sync.</div>`; return; }
+  const n = REP_SPANS.includes(state.repN) ? state.repN : 6; const rd = reportData(); const months = monthKeys(n);
+  const L = liqLedger(months[0] + '-01'); const cf = L.get;
+  const sel = months.includes(state.repSel) ? state.repSel : months[months.length - 1];
+  const f = cf(sel);
+  const totIn = months.reduce((a, m) => a + rd.get(m).in, 0);
+  const colIn = months.reduce((a, m) => a + cf(m).in, 0), colOut = months.reduce((a, m) => a + cf(m).out, 0);
+  const chips = REP_SPANS.map(k => `<button class="chip${k === n ? ' on' : ''}" data-rn="${k}">${k} months</button>`).join('');
+  const miniChips = REP_SPANS.map(k => `<button class="chip${k === n ? ' on' : ''}" data-rn="${k}" style="padding:4px 10px;font-size:12.5px">${k}M</button>`).join('');
+  const shown = k => !prefs.closed['rep.' + k];
+  const detBtn = k => `<button class="linkbtn" data-det="${k}" style="background:none;border:0;padding:6px 0 0;color:var(--accent);font-size:13px;font-weight:600;cursor:pointer">${shown(k) ? 'Hide details' : 'Show details'}</button>`;
+  const top = (o, k) => Object.entries(o).sort((a, b) => b[1] - a[1]).slice(0, k);
+  let html = `<div class="chips" style="margin-bottom:10px">${chips}</div>`;
+
+  // the line's value at the start and end of the selected month, to show the bars and the line agree
+  const pts = L.pts; state.lnPts = pts;
+  const at = day => { let v = null; for (const p of pts) { if (p.day > day) break; v = p.v; } return v; };
+  const mStart = sel + '-01', prevDay = isoDayOf(parseISO(mStart), -1);
+  const openV = mStart <= pts[0].day ? L.base : at(prevDay);
+  const closeV = at(sel === x_ym() ? isoDay(0) : monthEnd(sel));
+
+  // 1. Cash flow
+  const cfo = { view: prefs.cfView === 'out' ? 'out' : 'all', adj: prefs.cfAdj === 'adjusted' ? 'adjusted' : 'overlay' };
+  const both = cfo.view === 'all', adjOn = cfo.adj === 'adjusted';
+  const bigN = months.reduce((a, m) => a + cf(m).big.length, 0), bigOut = months.reduce((a, m) => a + cf(m).bigSum, 0);
+  const usedG = CF_GROUPS.filter(g => months.some(m => cf(m).g[g.k] > 0.004 || (!adjOn && cf(m).gb[g.k] > 0.004)));
+  const segBtn = (attr, v, cur, lbl) => `<button data-${attr}="${v}" class="${v === cur ? 'on' : ''}">${lbl}</button>`;
+  const avgLine = both
+    ? `Average per month: collections ${esc(money(colIn / n, { round: true }))}, disbursements ${esc(money(colOut / n, { round: true }))}, net ${esc(money((colIn - colOut) / n, { round: true, plus: true }))}.`
+    : `Average disbursements per month: ${esc(money(colOut / n, { round: true }))}.`;
+  const adjLine = bigN ? ` Without the ${bigN} ${bigN === 1 ? 'row' : 'rows'} over ${esc(fmtK(CF_BIG))}, disbursements average ${esc(money((colOut - bigOut) / n, { round: true }))}.` : ` No single row over ${esc(fmtK(CF_BIG))} in this window.`;
+  const bigSel = cfBigSorted(f);
+  html += `<div class="card pad"><b>Cash flow</b>
+    <div class="cfctl"><span class="seg2">${segBtn('cfv', 'all', cfo.view, 'All flows')}${segBtn('cfv', 'out', cfo.view, esc(tyP('out', 'Disbursements')) + ' only')}</span>
+      <span class="seg2">${segBtn('cfa', 'overlay', cfo.adj, 'Overlay over ' + fmtK(CF_BIG))}${segBtn('cfa', 'adjusted', cfo.adj, 'Adjusted only')}</span></div>
+    ${shown('cf') ? `<div class="muted" style="font-size:13px;margin:4px 0 12px">${avgLine}${adjLine}</div>` : '<div style="height:10px"></div>'}
+    <div id="cfWrap">${barSVG(months, cf, sel, cfo)}</div>
+    <div class="legend" style="margin-top:8px;gap:5px 12px">${both ? '<span><i style="background:var(--in)"></i>Collections</span>' : ''}${usedG.map(g => `<span><i style="background:${g.c}"></i>${esc(g.name)}</span>`).join('')}${!adjOn && bigN ? `<span><i class="hatch"></i>Single rows over ${esc(fmtK(CF_BIG))}</span>` : ''}</div>
+    ${shown('cf') ? `<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px">
+      <div style="display:flex;justify-content:space-between"><b>${esc(monLabel(sel, true))}${sel === x_ym() ? ' (so far)' : ''}</b>${both ? `<span class="num ${f.in - f.out < 0 ? 'v neg' : 'v in'}">${esc(money(f.in - f.out, { plus: true }))} net</span>` : ''}</div>
+      ${both ? `<div class="kvs"><span>Collections</span><span class="num">${esc(money(f.in))}</span></div>
+      ${top(f.srcs, 4).map(([k, v]) => `<div class="kvs sub"><span>${esc(k)}</span><span class="num">${esc(money(v))}</span></div>`).join('')}` : ''}
+      <div class="kvs"><span>Disbursements</span><span class="num">${esc(money(-f.out))}</span></div>
+      ${cfGroupsIn(f).map(([g, v]) => `<div class="kvs sub"><span style="display:inline-flex;align-items:center;gap:6px"><i style="width:8px;height:8px;border-radius:2px;background:${g.c}"></i>${esc(g.name)}</span><span class="num">${esc(money(-v))}</span></div>`).join('')}
+      ${bigSel.length ? `<div class="kvs sub"><span>Single rows over ${esc(fmtK(CF_BIG))}${adjOn ? ' (left out of the chart)' : ''}</span><span class="num">${esc(money(-f.bigSum))}</span></div>
+      ${bigSel.map(b => `<div class="kvs sub" style="padding-left:24px"><span>${esc(b.cat)} · ${esc(b.desc || '(no description)')}</span><span class="num">${esc(money(-b.amt))}</span></div>`).join('')}` : ''}
+      ${both && openV != null && closeV != null ? `<div class="kvs" style="margin-top:6px"><span class="muted">${esc(FIG[2])}</span><span class="num muted">${esc(money(openV))} → ${esc(money(closeV))}</span></div>` : ''}
+      <div class="faint" style="font-size:12px;margin-top:6px">Tap a month to see it here. Hover a bar, or long-press it on a phone, for its groups and its rows over ${esc(fmtK(CF_BIG))}; point at a colour to list its categories. Collections and disbursements move ${esc(FIG[2])}. Spending counts when made, whether from an account, a card or a payable; lending out, investing and topping up a maintaining balance are disbursements, and their reverse are collections. Card and payable payments, transfers between your accounts and accrued income don't count. Adjusted leaves out any single row over ${esc(fmtK(CF_BIG))}.</div></div>` : ''}
+      ${detBtn('cf')}</div>`;
+
+  // 2. Liquidity trend: the bars above, accumulated
+  const lastV = pts[pts.length - 1].v;
+  const qs = quarterAverages(months, cf);
+  html += `<div class="card pad"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><b>${esc(FIG[2])}</b><span style="display:flex;gap:4px">${miniChips}</span></div>
+    ${shown('ln') ? `<div class="muted" style="font-size:13px;margin:2px 0 4px">${esc(FIG[1])} less ${esc(lc(LN[3].label))}${AP_NAME ? ', ' + esc(lc(LN[10].label)) : ''} and ${esc(lc(LN[8].label))}. It moves only with the collections and disbursements above, over the same months.</div>
+    <div style="margin:6px 0 2px">${qs.map(q => `<div class="kvs sub"><span>${esc(q.label)}</span><span class="num v ${q.avg < 0 ? 'neg' : 'in'}">${esc(money(q.avg, { plus: true, round: true }))} per month</span></div>`).join('')}</div>` : ''}
+    <div id="lnRead" class="num" style="font-weight:650;font-size:20px;margin:6px 0">${esc(money(lastV))} <span class="muted" style="font-size:13px;font-weight:500">today</span></div>
+    ${lineSVG(pts)}${shown('ln') ? `<div class="faint" style="font-size:12px;margin-top:6px">Drag across the chart to read any day.</div>
+    ${netLiqTodayHTML(L)}` : ''}${detBtn('ln')}</div>`;
+
+  // 3. Spending by category, monthly averages over complete months
+  const av = rd.avg[n]; const cur = rd.get(x_ym()).cats;
+  const cats = Object.entries(av).sort((a, b) => b[1] - a[1]);
+  const maxC = Math.max(1, ...cats.map(c => c[1]));
+  const living = cats.reduce((a, c) => a + c[1], 0);
+  html += `<div class="card pad"><div style="display:flex;justify-content:space-between;align-items:baseline"><b>Spending by category</b><span class="num muted">${esc(money(living, { round: true }))}/mo</span></div>
+    <div class="muted" style="font-size:13px;margin-top:2px">Monthly average over the last ${n} complete months, like your ${esc(SHEET[3])}’s living-expense averages.</div>
+    ${cats.length ? hbars(cats.map(([k, v]) => [k, v, `3M ${fmtK(rd.avg[3][k] || 0)} · 6M ${fmtK(rd.avg[6][k] || 0)} · 12M ${fmtK(rd.avg[12][k] || 0)} · this month ${fmtK(cur[k] || 0)}`]), maxC, v => money(v, { round: true }) + '/mo') : '<div class="empty">No spending in this period.</div>'}</div>`;
+
+  // 4. inflow-type rows by source
+  const srcs = {}; months.forEach(m => Object.entries(rd.get(m).srcs).forEach(([k, v]) => srcs[k] = (srcs[k] || 0) + v));
+  const se = Object.entries(srcs).sort((a, b) => b[1] - a[1]); const maxS = Math.max(1, ...se.map(s => s[1]));
+  html += `<div class="card pad"><div style="display:flex;justify-content:space-between;align-items:baseline"><b>${esc(tyP('in', 'Collections'))} by source</b><span class="num muted">${esc(money(totIn, { round: true }))}</span></div>
+    <div class="muted" style="font-size:13px;margin-top:2px">Total over the last ${n} months, including this one.</div>
+    ${se.length ? hbars(se.map(([k, v]) => [k, v, `${(v / (totIn || 1) * 100).toFixed(1)}% · ${fmtK(v / n)}/mo`]), maxS, v => money(v, { round: true })) : `<div class="empty">No ${esc(lc(tyP('in', 'Collections')))} in this period.</div>`}</div>`;
+
+  // 5. Asset mix (summary tab)
+  const comp = (snap.dashboard.summary || []).filter(s => s.sub && s.value != null && s.value > 0);
+  const tc = comp.reduce((a, b) => a + b.value, 0) || 1;
+  const colors = ['var(--c1)', 'var(--c2)', 'var(--c3)', 'var(--c4)', 'var(--c5)', 'var(--c6)'];
+  const hl = state.highlight, hi = comp.find(c => c.label === hl);
+  if (comp.length) html += `<div class="card pad"><b>Asset mix</b><div class="muted" style="font-size:13px;margin-top:2px">Share of ${esc(lc(FIG[4]))}, from the ${esc(SHEET[3])}.</div>
+    <div class="stack">${comp.map((c, i) => `<button data-hl="${esc(c.label)}" style="flex:${c.value / tc};background:${colors[i % 6]};opacity:${hl && hl !== c.label ? .3 : 1}" aria-label="${esc(c.label)}"></button>`).join('')}</div>
+    <div class="legend">${comp.map((c, i) => `<button data-hl="${esc(c.label)}" class="${hl === c.label ? 'on' : ''}"><i style="background:${colors[i % 6]}"></i>${esc(MIX_SUFFIX ? c.label.replace(' ' + MIX_SUFFIX, '') : c.label)} ${esc(c.pct || '')}</button>`).join('')}</div>
+    ${hi ? `<div style="margin-top:10px;font-size:14px"><b>${esc(hi.label)}</b>: <span class="num">${esc(money(hi.value))}</span> <span class="muted">(${esc(hi.pct || '')})</span></div>` : ''}</div>`;
+
+  if (state.cfHide) state.cfHide();
+  el.innerHTML = html;
+  wireLine(); wireCF(months, cf, cfo);
+}
+const x_ym = () => isoDay(0).slice(0, 7);
+const isoDayOf = (d, off) => { const z = new Date(d); z.setDate(z.getDate() + off); return `${z.getFullYear()}-${String(z.getMonth() + 1).padStart(2, '0')}-${String(z.getDate()).padStart(2, '0')}`; };
+const monthEnd = ym => isoDayOf(new Date(+ym.slice(0, 4), +ym.slice(5), 1), -1);
+function wireLine() {
+  const svg = $('#lnSvg'); if (!svg) return; const pts = state.lnPts;
+  const W = 340, H = 150, pt = 10, pb = 18;
+  const vs = pts.map(p => p.v); let mn = Math.min(...vs), mx = Math.max(...vs); if (mx - mn < 1) { mx += 1; mn -= 1; }
+  const Y = v => pt + (H - pt - pb) * (1 - (v - mn) / (mx - mn));
+  const move = ev => {
+    const r = svg.getBoundingClientRect(); const cx = (ev.touches ? ev.touches[0].clientX : ev.clientX) - r.left;
+    const i = Math.max(0, Math.min(pts.length - 1, Math.round(cx / r.width * (pts.length - 1)))); const x = W * i / Math.max(1, pts.length - 1);
+    $('#lnCur').setAttribute('x1', x); $('#lnCur').setAttribute('x2', x); $('#lnDot').setAttribute('cx', x); $('#lnDot').setAttribute('cy', Y(pts[i].v));
+    $('#lnRead').innerHTML = `${esc(money(pts[i].v))} <span class="muted" style="font-size:13px;font-weight:500">${esc(i === pts.length - 1 ? 'today' : dayLabel(pts[i].day))}</span>`;
+  };
+  svg.addEventListener('pointermove', move); svg.addEventListener('pointerdown', move);
+  svg.addEventListener('touchmove', move, { passive: true });
+}
+
+/* ---------- activity (tab 3) ---------- */
+function rowMatches(r, f) {
+  if (f.type !== 'All' && r.type !== f.type) return false;
+  if (f.account && clean(r.source) !== f.account && clean(r.dest) !== f.account) return false;
+  if (f.q) {
+    const hay = (r.desc + ' ' + r.source + ' ' + r.dest + ' ' + r.amount + ' ' + nf.format(r.amount)).toLowerCase();
+    if (!f.q.toLowerCase().split(/\s+/).every(w => hay.includes(w))) return false;
+  }
+  return true;
+}
+function amountView(r, acct) {
+  if (acct) { const into = clean(r.dest) === acct; return { cls: into ? 'in' : '', txt: into ? money(r.amount, { plus: true }) : money(-r.amount) }; }
+  if (isT(r.type, 'in')) return { cls: 'in', txt: money(r.amount, { plus: true }) };
+  if (isT(r.type, 'out')) return { cls: '', txt: money(-r.amount) };
+  return { cls: 'tr', txt: money(r.amount) };
+}
+function renderActivity() {
+  const f = state.filter;
+  const chips = ['All'].concat(types()).map(t => `<button class="chip${f.type === t ? ' on' : ''}" data-ft="${esc(t)}">${t === 'All' ? 'All' : esc(typePlural(t))}</button>`);
+  if (f.account) chips.unshift(`<button class="chip on" data-fa="x">${esc(f.account)} ✕</button>`);
+  $('#actChips').innerHTML = chips.join('');
+  const list = $('#actList');
+  if (!rows.length && !queue.length) { list.innerHTML = `<div class="empty">${esc(SHEET[1])} appear after the first sync.</div>`; return; }
+  const all = queue.map(e => Object.assign({ pending: true }, e)).reverse().concat(rows.slice().reverse());
+  const hits = all.filter(r => rowMatches(r, f));
+  if (!hits.length) { list.innerHTML = `<div class="empty">No matching transactions.</div>`; return; }
+  const shown = hits.slice(0, 400);
+  let html = '', day = null, buf = [], dayOut = 0;
+  const flushDay = () => { if (day === null) return;
+    html += `<div class="dayhead"><span>${esc(dayLabel(day))}</span>${dayOut ? `<span class="num">${esc(money(dayOut))} out</span>` : ''}</div><div class="card">${buf.join('')}</div>`;
+    buf = []; dayOut = 0; };
+  shown.forEach((r, i) => {
+    if (r.date !== day) { flushDay(); day = r.date; }
+    if (isT(r.type, 'out')) dayOut += Number(r.amount) || 0;
+    const a = amountView(r, f.account);
+    buf.push(`<button class="row" data-r="${i}"><div class="grow"><div class="t">${r.pending ? `<span class="pending">${r.status === 'failed' ? 'Rejected' : 'Queued'}</span>` : ''}${esc(r.desc)}</div>
+      <div class="s">${esc(clean(r.source))} → ${esc(clean(r.dest))}</div></div><div class="v ${a.cls}">${esc(a.txt)}</div></button>`);
+  });
+  flushDay();
+  state.shownRows = shown;
+  const acctLine = f.account && derived().accounts.has(f.account) ? `<div class="recon"><i></i>${esc(f.account)} balance ${esc(money(bal(f.account)))}</div>` : '';
+  list.innerHTML = acctLine + html + `<p class="hint">${hits.length > 400 ? `Showing the newest 400 of ${hits.length.toLocaleString()} matches.` : `${hits.length.toLocaleString()} ${hits.length === 1 ? 'row' : 'rows'}`} · full log of ${rows.length.toLocaleString()} rows is on ${here()}.</p>`;
+}
+
+/* ---------- Bulk import ---------- */
+function parseDateAny(s) {
+  let m, y, mo, d;
+  if ((m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(s))) { y = +m[1]; mo = +m[2]; d = +m[3]; }
+  else if ((m = /^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/.exec(s))) { mo = +m[1]; d = +m[2]; y = +m[3]; if (y < 100) y += 2000; }
+  else return null;
+  const dt = new Date(y, mo - 1, d);
+  if (dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null;
+  return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+function canon(name, list) { const k = clean(name).toLowerCase(); return list.find(x => clean(x).toLowerCase() === k) || null; }
+function findDup(e) {
+  const t = parseISO(e.date).getTime();
+  const pool = queue.concat(rows.slice().reverse());
+  return pool.find(r => Math.abs((Number(r.amount) || 0) - e.amount) < 0.005 && clean(r.source) === clean(e.source)
+    && Math.abs(parseISO(r.date) - t) <= 7 * 864e5) || null;
+}
+function parseBulk(text) {
+  const map = optMap(); const out = []; const tomorrow = isoDay(1);
+  String(text || '').replace(/\r/g, '').split('\n').forEach((line, i) => {
+    const raw = line.trim();
+    if (!raw || /^```/.test(raw) || /^[-|:\s]+$/.test(raw)) return;
+    let cells = line.split('\t').map(c => c.trim());
+    if (cells.length < 6) cells = raw.replace(/^\|/, '').replace(/\|$/, '').split(/\s*\|\s*|\s{2,}/).map(c => c.trim());
+    while (cells.length && cells[cells.length - 1] === '' && cells.length > 6) cells.pop();
+    if (/^date$/i.test(cells[0] || '') && /type/i.test(cells[2] || '')) return; // header row
+    const r = { line: i + 1, raw, include: false };
+    if (cells.length < 6) { r.error = `Needs 6 columns (Date, Transaction, Type, Source, Destination, Amount); found ${cells.length}`; out.push(r); return; }
+    const [dRaw, desc, tRaw, sRaw, dsRaw, aRaw] = cells;
+    r.date = parseDateAny(dRaw); r.desc = desc;
+    r.type = typeOf(tRaw);
+    const amtTxt = unmoney(aRaw);
+    r.amount = /^\(.*\)$/.test(amtTxt) ? -Number(amtTxt.slice(1, -1)) : Number(amtTxt);
+    if (!r.date) r.error = `Date “${dRaw}” isn’t MM/DD/YY`;
+    else if (!desc) r.error = 'Transaction description is empty';
+    else if (!r.type) r.error = `Type “${tRaw}” must be ${orList(typeWords())}`;
+    else if (!isFinite(r.amount) || r.amount <= 0) r.error = `Amount “${aRaw}” must be a positive number`;
+    else {
+      r.amount = r2(r.amount);
+      r.source = canon(sRaw, Object.keys(map[r.type] || {}));
+      if (r.source && RETIRED.has(clean(r.source))) r.error = `${clean(r.source)} is retired as a source`;
+      else if (!r.source) r.error = `“${sRaw}” isn’t a valid source for ${r.type} in the ${SHEET[2]} tab`;
+      else {
+        r.dest = canon(dsRaw, map[r.type][r.source]);
+        if (!r.dest) r.error = `${clean(r.source)} → “${dsRaw}” isn’t a valid pair in the ${SHEET[2]} tab`;
+      }
+    }
+    if (!r.error) {
+      r.dup = findDup(r);
+      if (r.date > tomorrow) r.future = true;
+      r.include = !r.dup;
+    }
+    out.push(r);
+  });
+  return out;
+}
+function openBulk() {
+  if (!snap) { toast('Sync once first so the app knows your accounts', 'err'); return; }
+  let parsed = parseBulk(state.bulkText || '');
+  openSheet(`<h2>Paste multiple rows</h2>
+    <p>Six tab-separated columns per line: Date, Transaction, Type, Source, Destination, Amount. Header lines and code fences are ignored.</p>
+    <textarea class="bulk" id="bText" placeholder="${esc(PASTE_EX)}" autocapitalize="off" autocorrect="off" spellcheck="false">${esc(state.bulkText || '')}</textarea>
+    <div class="btns" style="grid-template-columns:1fr 1fr;margin-top:8px"><button class="secondary" id="bPaste">Paste</button><button class="secondary" id="bClear">Clear</button></div>
+    <div class="bsum"><span id="bSum" class="muted"></span><button class="primary" id="bImport" style="width:auto;padding:11px 18px;white-space:nowrap;flex:none">Import</button></div>
+    <div id="bList"></div>
+    <div class="btns"><button class="secondary" id="closeS">Close</button></div>`);
+  const draw = () => {
+    const ok = parsed.filter(r => !r.error), inc = ok.filter(r => r.include), bad = parsed.length - ok.length, dups = ok.filter(r => r.dup).length;
+    const out = inc.filter(r => isT(r.type, 'out')).reduce((a, r) => a + r.amount, 0);
+    $('#bSum').textContent = parsed.length ? `${inc.length} of ${parsed.length} selected${bad ? ` · ${bad} with errors` : ''}${dups ? ` · ${dups} possible duplicate${dups > 1 ? 's' : ''}` : ''}${out ? ` · ${money(out)} out` : ''}` : 'Nothing pasted yet';
+    $('#bImport').disabled = !inc.length;
+    $('#bImport').textContent = inc.length ? `Import ${inc.length}` : 'Import';
+    $('#bList').innerHTML = parsed.map((r, i) => r.error
+      ? `<div class="brow"><input type="checkbox" disabled><div class="grow"><div class="t" style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px;word-break:break-all">${esc(r.raw)}</div><div class="bad">Line ${r.line}: ${esc(r.error)}</div></div></div>`
+      : `<label class="brow"><input type="checkbox" data-bi="${i}" ${r.include ? 'checked' : ''}><div class="grow"><div class="t">${esc(r.desc)}</div>
+          <div class="s">${esc(dayLabel(r.date))} · ${esc(typeLabel(r.type))} · ${esc(clean(r.source))} → ${esc(clean(r.dest))}</div>
+          ${r.dup ? `<div class="warn">Possible duplicate of ${r.dup.row ? 'row ' + r.dup.row : 'a queued entry'}: ${esc(r.dup.desc)}, ${esc(dayLabel(r.dup.date))}. Tick to import anyway.</div>` : ''}
+          ${r.future ? `<div class="warn">Date is in the future.</div>` : ''}</div>
+          <div class="v num" style="font-weight:600;font-size:15px">${esc(isT(r.type, 'out') ? money(-r.amount) : isT(r.type, 'in') ? money(r.amount, { plus: true }) : money(r.amount))}</div></label>`).join('');
+  };
+  let tmr;
+  const reparse = () => { state.bulkText = $('#bText').value; parsed = parseBulk(state.bulkText); draw(); };
+  $('#bText').addEventListener('input', () => { clearTimeout(tmr); tmr = setTimeout(reparse, 200); });
+  $('#bList').addEventListener('change', e => { const c = e.target.closest('[data-bi]'); if (c) { parsed[+c.dataset.bi].include = c.checked; draw(); } });
+  $('#bPaste').onclick = async () => {
+    try { const t = await navigator.clipboard.readText(); $('#bText').value = ($('#bText').value ? $('#bText').value + '\n' : '') + t; reparse(); }
+    catch (e) { toast('Clipboard not available. Long-press the box and tap Paste.', 'err'); }
+  };
+  $('#bClear').onclick = () => { $('#bText').value = ''; reparse(); };
+  $('#bImport').onclick = () => {
+    const inc = parsed.filter(r => !r.error && r.include); if (!inc.length) return;
+    const base = Date.now();
+    inc.forEach((r, k) => queue.push({ id: uid(), date: r.date, desc: r.desc, type: r.type, source: r.source, dest: r.dest, amount: r.amount, createdAt: base + k, status: 'pending' }));
+    saveQueue(); state.bulkText = '';
+    $('#sheet').classList.remove('on'); $('#scrim').classList.remove('on');
+    toast(`${inc.length} ${inc.length === 1 ? 'row' : 'rows'} saved${navigator.onLine ? ', sending' : '. They send when you’re back online'}`);
+    renderAll(); flush();
+  };
+  $('#closeS').onclick = closeSheet;
+  draw();
+}
+
+/* ---------- sheets (modals) ---------- */
+function openSheet(html) { if (isPC()) closeAdd(); $('#sheet').innerHTML = `<div class="grab"></div>` + html; $('#sheet').classList.add('on'); $('#scrim').classList.add('on'); }
+function closeSheet() { if (!cfg) return; $('#sheet').classList.remove('on'); $('#scrim').classList.remove('on'); }
+
+function openRow(r) {
+  const tsv = [sheetDate(r.date), r.desc, r.type, r.source, r.dest, r.amount].join('\t');
+  openSheet(`<h2>${esc(r.desc)}</h2><p>${r.pending ? 'On ' + here() + ', not yet in the sheet' : 'Row ' + r.row + ' of ' + esc(SHEET[1])}</p>
+    <div class="kv"><span>Date</span><span>${esc(dayLabel(r.date))} (${esc(sheetDate(r.date))})</span></div>
+    <div class="kv"><span>Type</span><span>${esc(r.type)}</span></div>
+    <div class="kv"><span>Source</span><span>${esc(clean(r.source))}</span></div>
+    <div class="kv"><span>Destination</span><span>${esc(clean(r.dest))}</span></div>
+    <div class="kv"><span>Amount</span><span class="num">${esc(money(Number(r.amount)))}</span></div>
+    <div class="btns"><button class="primary" id="again">Log again for today</button>
+    <button class="secondary" id="editRow">Edit</button>
+    <button class="secondary" id="copytsv">Copy as sheet row</button>
+    <button class="secondary" id="closeS">Close</button></div>`);
+  $('#editRow').onclick = () => openEdit(r);
+  $('#again').onclick = () => {
+    closeSheet(); switchTab('add');
+    $('#desc').value = r.desc; $('#amt').value = String(r.amount); $('#date').value = isoDay(0);
+    if (types().includes(r.type)) state.type = r.type; renderAddForm(r.source, r.dest);
+    toast('Check the amount, then Save');
+  };
+  $('#copytsv').onclick = async () => { try { await navigator.clipboard.writeText(tsv); toast('Copied'); } catch (e) { toast('Copy failed', 'err'); } };
+  $('#closeS').onclick = closeSheet;
+}
+
+/* ---------- Edit a logged row ----------
+   A queued entry is changed in the queue. A sheet row is rewritten in place through the editRow action
+   (apps-script/edits.gs), which only writes if the sheet still holds the row exactly as last synced. */
+function openEdit(r) {
+  if (!snap) { toast('Sync once first so the app knows your accounts', 'err'); return; }
+  const orig = { date: r.date, desc: r.desc, type: r.type, source: r.source, dest: r.dest, amount: r2(Number(r.amount)) };
+  const st = { type: types().includes(r.type) ? r.type : types()[0] || null };
+  openSheet(`<h2>Edit transaction</h2><p>${r.pending ? 'Queued on ' + here() + ', not yet in the sheet' : 'Row ' + r.row + ' of ' + esc(SHEET[1])}</p>
+    <label for="eAmt" class="label">Amount</label><input class="txt" id="eAmt" inputmode="decimal" value="${esc(String(orig.amount))}" autocomplete="off">
+    <label class="label">Type</label><div class="seg" id="eType">${types().map(t => `<button data-type="${esc(t)}">${esc(typeLabel(t))}</button>`).join('')}</div>
+    <label for="eDesc" class="label">Description</label><input class="txt" id="eDesc" value="${esc(r.desc)}" autocomplete="off" autocorrect="off" spellcheck="false">
+    <label for="eSrc" class="label" id="eSrcL">From</label><select class="txt" id="eSrc"></select>
+    <label for="eDst" class="label" id="eDstL">To</label><select class="txt" id="eDst"></select>
+    <label for="eDate" class="label">Date</label><input class="txt" type="date" id="eDate" value="${esc(r.date)}">
+    <div id="eNote"></div>
+    <div class="btns"><button class="primary" id="eSave">Save changes</button><button class="secondary" id="closeS">Cancel</button></div>`);
+
+  // Keep the row's own values selectable even if the pairs tab no longer lists them, so opening the editor never changes them silently.
+  const LEGACY = ` (not in the ${SHEET[2]} tab)`;
+  const opts = (list, keep) => { const m = canon(keep, list); return { list: m || !keep ? list : [keep].concat(list), sel: m || keep }; };
+  const fill = (sel, list, value, legacy) => {
+    sel.innerHTML = list.map(v => `<option value="${esc(v)}">${esc(clean(v))}${v === legacy ? esc(LEGACY) : ''}</option>`).join('');
+    sel.value = list.includes(value) ? value : (list[0] || '');
+  };
+  const drawDests = keep => {
+    const src = $('#eSrc').value; let list = destsFor(st.type, src), legacy = null;
+    if (st.type === orig.type && clean(src) === clean(orig.source)) { const o = opts(list, orig.dest); if (o.list !== list) legacy = orig.dest; list = o.list; keep = keep || o.sel; }
+    fill($('#eDst'), list, keep && canon(keep, list) || keep, legacy);
+  };
+  const draw = (keepSrc, keepDst) => {
+    document.querySelectorAll('#eType button').forEach(b => b.classList.toggle('on', b.dataset.type === st.type));
+    $('#eSrcL').textContent = isT(st.type, 'in') ? 'Income from' : 'From';
+    $('#eDstL').textContent = isT(st.type, 'in') ? 'Into' : isT(st.type, 'out') ? 'Category' : 'To';
+    let list = sourcesFor(st.type), legacy = null;
+    if (st.type === orig.type) { const o = opts(list, orig.source); if (o.list !== list) legacy = orig.source; list = o.list; keepSrc = keepSrc || o.sel; }
+    fill($('#eSrc'), list, keepSrc && canon(keepSrc, list) || keepSrc, legacy);
+    drawDests(keepDst);
+    note();
+  };
+  const read = () => ({ date: $('#eDate').value, desc: clean($('#eDesc').value), type: st.type, source: $('#eSrc').value, dest: $('#eDst').value, amount: parseAmount($('#eAmt').value) });
+  const changed = e => ['date', 'desc', 'type', 'source', 'dest'].some(k => clean(e[k]) !== clean(orig[k])) || Math.abs(e.amount - orig.amount) >= 0.005;
+  const pairOK = e => (destsFor(e.type, e.source).includes(e.dest) && !RETIRED.has(clean(e.source)))
+    || (e.type === orig.type && clean(e.source) === clean(orig.source) && clean(e.dest) === clean(orig.dest));
+  // what the change does to each balance: reverse the old row, apply the new one
+  function note(msg) {
+    const e = read(), fx = {}, add = (n, v) => { n = clean(n); fx[n] = r2((fx[n] || 0) + v); };
+    if (e.amount > 0 && e.source && e.dest) { add(orig.dest, -orig.amount); add(orig.source, orig.amount); add(e.dest, e.amount); add(e.source, -e.amount); }
+    const acc = derived().accounts;
+    const lines = Object.entries(fx).filter(([, v]) => Math.abs(v) >= 0.005).sort((a, b) => (acc.has(b[0]) - acc.has(a[0])))
+      .map(([n, v]) => `<b>${esc(n)}</b> ${esc(money(v, { plus: true }))}${acc.has(n) ? ` → ${esc(money(r2(bal(n) + v)))}` : ''}`);
+    const parts = [];
+    if (msg) parts.push(`<div class="banner" style="margin:14px 0 0">${esc(msg)}</div>`);
+    if (e.source && e.dest && !pairOK(e)) parts.push(`<div class="banner warn" style="margin:14px 0 0">${esc(clean(e.source))} → ${esc(clean(e.dest))} isn’t a valid ${esc(typeLabel(e.type))} pair in the ${esc(SHEET[2])} tab.</div>`);
+    if (lines.length) parts.push(`<div class="efx">Balance effect: ${lines.join(' · ')}</div>`);
+    $('#eNote').innerHTML = parts.join('');
+  }
+
+  $('#eType').onclick = ev => { const b = ev.target.closest('button'); if (!b) return; st.type = b.dataset.type; draw($('#eSrc').value, $('#eDst').value); };
+  $('#eSrc').onchange = () => { drawDests($('#eDst').value); note(); };
+  ['#eDst', '#eDate'].forEach(s => $(s).onchange = () => note());
+  ['#eAmt', '#eDesc'].forEach(s => $(s).addEventListener('input', () => note()));
+  $('#closeS').onclick = closeSheet;
+
+  $('#eSave').onclick = async () => {
+    const e = read(), btn = $('#eSave');
+    if (!(e.amount > 0)) { toast('Enter an amount', 'err'); return; }
+    if (!e.desc) { toast('Add a description', 'err'); return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(e.date)) { toast('Pick a date', 'err'); return; }
+    if (!e.source || !e.dest) { toast('Pick a source and destination', 'err'); return; }
+    if (!pairOK(e)) { toast(`That pair isn’t in the ${SHEET[2]} tab`, 'err'); return; }
+    if (!changed(e)) { toast('Nothing changed'); closeSheet(); return; }
+
+    if (r.pending) {
+      const q = queue.find(x => x.id === r.id);
+      if (!q) { closeSheet(); toast('That entry already reached the sheet. Open it from ' + TAB[3] + ' again to edit the row.', 'err'); renderAll(); return; }
+      if (state.flushing) { toast('It’s being sent right now. Edit it once it reaches the sheet.', 'err'); return; }
+      Object.assign(q, e, { status: 'pending' }); delete q.error;
+      saveQueue(); closeSheet(); toast('Entry updated'); renderAll(); flush(); return;
+    }
+
+    if (!navigator.onLine) { note('Editing a row that’s already in the sheet needs a connection.'); return; }
+    btn.disabled = true; btn.textContent = 'Saving…';
+    try {
+      await api('editRow', { row: r.row, expect: orig, entry: e });
+    } catch (err) {
+      btn.disabled = false; btn.textContent = 'Save changes';
+      if (err.auth) { onError(err); return; }
+      if (err.network) { note(err.message + '. Nothing was changed.'); return; }
+      const stale = /changed in the sheet/i.test(err.message);
+      note(stale ? err.message : `${err.message}. If the sheet doesn’t recognise “editRow”, the script needs edits.gs added (see the repo’s apps-script folder).`);
+      if (stale) sync();
+      return;
+    }
+    // show the edit right away; the next sync re-pulls the row's block because its hash changed
+    const local = rows.find(x => x.row === r.row);
+    if (local) { Object.assign(local, e); store.set(LS.rows, rows); dirty(); }
+    closeSheet(); toast(`Row ${r.row} updated`); renderAll(); sync();
+  };
+  draw(orig.source, orig.dest);
+}
+
+function openSettings(msg) {
+  const first = !cfg;
+  openSheet(`<h2>${first ? 'Connect your sheet' : 'Settings'}</h2>
+    ${msg ? `<div class="banner" style="margin-top:8px">${esc(msg)}</div>` : ''}
+    ${first ? `<p>Paste your connection code. It stays on ${here()}. The first sync downloads your whole ${esc(SHEET[1])} log.</p>` : ''}
+    <label class="label" for="sUrl">Connection code or Web app URL</label>
+    <input class="txt" id="sUrl" placeholder="https://script.google.com/macros/s/…/exec" value="${esc(cfg ? cfg.url : '')}" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+    <label class="label" for="sKey">Key (not needed with a connection code)</label>
+    <input class="txt" id="sKey" placeholder="Only if you pasted a plain URL" value="${esc(cfg ? cfg.key : '')}" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+    <div class="btns"><button class="primary" id="sSave">${first ? 'Connect' : 'Save and test'}</button>
+    ${first ? '' : `<button class="secondary" id="sSync">Sync now</button>
+    <button class="secondary" id="sFull">Re-download the full log</button>
+    ${queue.length ? `<button class="secondary" id="sDiscard" style="color:var(--neg)">Discard ${queue.length} queued ${queue.length === 1 ? 'entry' : 'entries'}</button>` : ''}
+    <button class="secondary" id="closeS">Close</button>`}</div>
+    ${first ? '' : `<label class="label">Layout</label>
+    <div class="seg" id="sLayout" style="margin:0">${[['auto', 'Auto'], ['phone', 'Phone'], ['pc', 'Desktop']].map(([k, t]) => `<button data-lay="${k}" class="${(prefs.layout || 'auto') === k ? 'on' : ''}">${t}</button>`).join('')}</div>
+    <p style="font-size:13px">Auto shows the desktop dashboard on a computer with a mouse or trackpad and a window at least 1,000 pixels wide, and the phone layout everywhere else.</p>`}
+    ${first ? '' : `<p style="margin-top:14px;font-size:13px">${rows.length.toLocaleString()} rows on ${here()} · last sync ${snap && snap.syncedAt ? esc(new Date(snap.syncedAt).toLocaleString()) : 'never'}${snap && snap.bufferRows != null ? ` · ${snap.bufferRows} blank rows left in ${esc(SHEET[1])}` : ''} · v${VERSION}</p>`}`);
+  $('#sSave').onclick = async () => {
+    let u = clean($('#sUrl').value).replace(/\s+/g, ''), k = clean($('#sKey').value);
+    const m = /^(https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec)#(\w+)$/.exec(u);
+    if (m) { u = m[1]; k = m[2]; }
+    const conf = { url: u, key: k };
+    if (!/^https:\/\/script\.google(usercontent)?\.com\//.test(conf.url)) { toast('That doesn’t look like an Apps Script URL', 'err'); return; }
+    if (!conf.key) { toast('Paste the key too', 'err'); return; }
+    const b = $('#sSave'); b.disabled = true; b.textContent = 'Testing…';
+    try {
+      await api('ping', {}, conf);
+      cfg = conf; store.set(LS.cfg, cfg); state.lastError = null;
+      $('#sheet').classList.remove('on'); $('#scrim').classList.remove('on');
+      toast('Connected. Downloading your log…'); renderAll(); sync();
+    } catch (e) { b.disabled = false; b.textContent = first ? 'Connect' : 'Save and test'; toast(e.auth ? 'Wrong key' : e.message, 'err'); }
+  };
+  if (!first) {
+    $('#sSync').onclick = () => { closeSheet(); sync(); };
+    $('#sFull').onclick = () => { blocks = {}; store.set(LS.blocks, blocks); closeSheet(); sync(); };
+    $('#closeS').onclick = closeSheet;
+    $('#sLayout').onclick = e => {
+      const b = e.target.closest('[data-lay]'); if (!b) return;
+      prefs.layout = b.dataset.lay; savePrefs(); applyLayout();
+      $('#sLayout').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+    };
+    const dz = $('#sDiscard'); if (dz) dz.onclick = () => { if (confirm('Discard all queued entries? They have not reached your sheet.')) { queue = []; saveQueue(); closeSheet(); renderAll(); } };
+  }
+}
+
+/* ---------- layout: phone tabs or desktop dashboard ----------
+   Auto picks the dashboard for a fine pointer with hover (mouse or trackpad) and a window at least 1,000px wide,
+   re-checked whenever that media query changes. Settings → Layout can force either one (prefs.layout). */
+const PC_MQ = window.matchMedia ? window.matchMedia('(hover: hover) and (pointer: fine) and (min-width: 1000px)') : { matches: false };
+function wantPC() { return prefs.layout === 'pc' ? true : prefs.layout === 'phone' ? false : PC_MQ.matches; }
+function applyLayout(boot) {
+  const pc = wantPC();
+  if (!boot && pc === isPC()) return;
+  if (!pc) closeAdd();
+  document.documentElement.classList.toggle('pc', pc);
+  const qw = $('#queueWrap');
+  if (pc) { $('#v-act').insertBefore(qw, $('#v-act').firstChild); $('#title').textContent = 'Ledger'; }
+  else $('#v-add').appendChild(qw);
+  if (boot) return;
+  if (pc) renderAll(); else switchTab(TITLES[state.tab] ? state.tab : 'add');
+}
+if (PC_MQ.addEventListener) PC_MQ.addEventListener('change', () => applyLayout());
+
+/* the Add modal (desktop only; on the phone Add is a tab) */
+function openAdd() {
+  if (!isPC()) { switchTab('add'); return; }
+  if ($('#sheet').classList.contains('on')) { if (!cfg) return; $('#sheet').classList.remove('on'); }
+  state.adding = true; document.documentElement.classList.add('adding'); $('#scrim').classList.add('on');
+  $('#v-add').scrollTop = 0; renderAddBanner(); renderAddForm();
+  setTimeout(() => $('#amt').focus(), 20);
+}
+function closeAdd() {
+  if (!state.adding) return;
+  state.adding = false; document.documentElement.classList.remove('adding'); $('#sugg').hidden = true;
+  if (!$('#sheet').classList.contains('on')) $('#scrim').classList.remove('on');
+}
+
+/* ---------- navigation ---------- */
+function switchTab(t) {
+  if (isPC()) {
+    // every view is already on screen: Add opens the modal, anything else re-renders and points at its column
+    if (t === 'add') { openAdd(); return; }
+    renderView();
+    const v = $('#v-' + t); if (v) { v.scrollTop = 0; v.classList.remove('flash'); void v.offsetWidth; v.classList.add('flash'); }
+    return;
+  }
+  state.tab = t; prefs.tab = t; savePrefs();
+  document.querySelectorAll('.view').forEach(v => v.classList.toggle('on', v.id === 'v-' + t));
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
+  $('#title').textContent = TITLES[t];
+  window.scrollTo(0, 0);
+  renderView();
+}
+function renderView() {
+  if (isPC()) {
+    renderAddBanner(); renderQueue(); if (state.adding) renderAddForm();
+    renderBalances(); renderReports(); renderActivity();
+    return;
+  }
+  if (state.tab === 'add') { renderAddBanner(); renderAddForm(); renderQueue(); }
+  if (state.tab === 'bal') renderBalances();
+  if (state.tab === 'act') renderActivity();
+  if (state.tab === 'rep') renderReports();
+}
+function renderAll() { renderStatus(); renderView(); }
+
+/* ---------- events ---------- */
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => switchTab(b.dataset.tab));
+$('#status').onclick = () => cfg ? sync() : openSettings();
+$('#gear').onclick = () => openSettings();
+$('#scrim').onclick = () => { if (state.adding) closeAdd(); else closeSheet(); };
+$('#hAdd').onclick = () => openAdd();
+$('#hPaste').onclick = () => openBulk();
+$('#addClose').onclick = () => closeAdd();
+window.addEventListener('scroll', () => $('#hdr').classList.toggle('scrolled', window.scrollY > 4), { passive: true });
+
+$('#typeSeg').onclick = e => { const b = e.target.closest('button'); if (!b) return; state.type = b.dataset.type; renderAddForm(); };
+$('#src').onchange = () => { renderDests(); markChips($('#srcChips'), $('#src').value); renderSrcBal(); };
+$('#dst').onchange = () => markChips($('#dstChips'), $('#dst').value);
+$('#srcChips').onclick = e => { const c = e.target.closest('.chip'); if (!c) return; $('#src').value = c.dataset.v; renderDests(); markChips($('#srcChips'), c.dataset.v); renderSrcBal(); };
+$('#dstChips').onclick = e => { const c = e.target.closest('.chip'); if (!c) return; $('#dst').value = c.dataset.v; markChips($('#dstChips'), c.dataset.v); };
+$('#desc').addEventListener('input', renderSuggestions);
+$('#desc').addEventListener('focus', renderSuggestions);
+$('#desc').addEventListener('blur', () => setTimeout(() => $('#sugg').hidden = true, 200));
+$('#sugg').addEventListener('pointerdown', e => e.preventDefault());
+$('#sugg').onclick = e => { const b = e.target.closest('button'); if (!b) return; applyTemplate(derived().templates[+b.dataset.i]); };
+$('#date').onchange = markDateChips;
+document.querySelectorAll('[data-day]').forEach(c => c.onclick = () => { $('#date').value = isoDay(+c.dataset.day); markDateChips(); });
+
+// more: desktop "Save and add another" keeps the modal open for the next entry
+function saveEntry(more) {
+  if (!cfg) { openSettings(); return; }
+  const amount = parseAmount($('#amt').value);
+  const desc = clean($('#desc').value);
+  const source = $('#src').value, dest = $('#dst').value, date = $('#date').value;
+  if (!(amount > 0)) { toast('Enter an amount', 'err'); $('#amt').focus(); return; }
+  if (!desc) { toast('Add a description', 'err'); $('#desc').focus(); return; }
+  if (!source || !dest) { toast('Pick a source and destination', 'err'); return; }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { toast('Pick a date', 'err'); return; }
+  queue.push({ id: uid(), date, desc, type: state.type, source, dest, amount, createdAt: Date.now(), status: 'pending' });
+  saveQueue();
+  prefs.lastSrc[state.type] = source; prefs.lastDst[state.type + '|' + source] = dest; savePrefs();
+  $('#amt').value = ''; $('#desc').value = '';
+  toast(navigator.onLine ? 'Saved' : 'Saved on ' + here() + '. It reaches the sheet when you’re back online.');
+  if (isPC()) { if (more) $('#amt').focus(); else closeAdd(); }
+  renderAll(); flush();
+}
+$('#save').onclick = () => saveEntry(false);
+$('#saveMore').onclick = () => saveEntry(true);
+
+$('#bulkBtn').onclick = () => openBulk();
+$('#queueWrap').onclick = e => {
+  const b = e.target.closest('[data-q]'); if (!b) return;
+  const i = queue.findIndex(x => x.id === b.dataset.id); if (i < 0) return;
+  const en = queue[i];
+  if (b.dataset.q === 'del') queue.splice(i, 1);
+  if (b.dataset.q === 'retry') { en.status = 'pending'; delete en.error; }
+  if (b.dataset.q === 'edit') {
+    queue.splice(i, 1);
+    $('#amt').value = String(en.amount); $('#desc').value = en.desc; $('#date').value = en.date;
+    if (types().includes(en.type)) state.type = en.type;
+    saveQueue(); renderAddForm(en.source, en.dest); if (isPC()) openAdd(); renderAll(); window.scrollTo(0, 0); return;
+  }
+  saveQueue(); renderAll(); if (b.dataset.q === 'retry') flush();
+};
+
+$('#v-bal').addEventListener('click', e => {
+  if (e.target.closest('summary')) return;
+  const al = e.target.closest('[data-alloc]'); if (al) { editAlloc(al.dataset.alloc === '__new' ? null : al.dataset.alloc); return; }
+  if (e.target.closest('[data-nca]')) { openNetCash(); return; }
+  if (e.target.closest('[data-nl]')) { openNetLiquidity(); return; }
+  const a = e.target.closest('[data-acct]');
+  if (a) { state.filter = { q: '', type: 'All', account: a.dataset.acct }; $('#q').value = ''; switchTab('act'); return; }
+  const w = e.target.closest('[data-who]');
+  if (w) { state.filter = { q: w.dataset.who, type: 'All', account: null }; $('#q').value = w.dataset.who; switchTab('act'); }
+});
+$('#v-bal').addEventListener('toggle', e => {
+  const d = e.target; if (!d.dataset) return;
+  if (d.dataset.okey) { if (d.open) prefs.open[d.dataset.okey] = 1; else delete prefs.open[d.dataset.okey]; savePrefs(); }
+  else if (d.dataset.key) { if (d.open) delete prefs.closed[d.dataset.key]; else prefs.closed[d.dataset.key] = 1; savePrefs(); }
+}, true);
+$('#v-rep').addEventListener('click', e => {
+  const rn = e.target.closest('[data-rn]'); if (rn) { state.repN = +rn.dataset.rn; renderReports(); return; }
+  const dt = e.target.closest('[data-det]'); if (dt) { const k = 'rep.' + dt.dataset.det; if (prefs.closed[k]) delete prefs.closed[k]; else prefs.closed[k] = 1; savePrefs(); renderReports(); return; }
+  const cv = e.target.closest('[data-cfv]'); if (cv) { prefs.cfView = cv.dataset.cfv; savePrefs(); renderReports(); return; }
+  const ca = e.target.closest('[data-cfa]'); if (ca) { prefs.cfAdj = ca.dataset.cfa; savePrefs(); renderReports(); return; }
+  const m = e.target.closest('[data-m]'); if (m) { state.repSel = m.dataset.m; renderReports(); return; }
+  const hl = e.target.closest('[data-hl]'); if (hl) { state.highlight = state.highlight === hl.dataset.hl ? null : hl.dataset.hl; renderReports(); }
+});
+let qTimer;
+$('#q').addEventListener('input', () => { clearTimeout(qTimer); qTimer = setTimeout(() => { state.filter.q = clean($('#q').value); renderActivity(); }, 120); });
+$('#actChips').onclick = e => {
+  const c = e.target.closest('.chip'); if (!c) return;
+  if (c.dataset.fa) state.filter.account = null; else state.filter.type = c.dataset.ft;
+  renderActivity();
+};
+$('#actList').onclick = e => { const r = e.target.closest('[data-r]'); if (r) openRow(state.shownRows[+r.dataset.r]); };
+
+window.addEventListener('online', () => sync());
+window.addEventListener('offline', renderAll);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible' || !cfg) return;
+  const age = snap && snap.syncedAt ? Date.now() - Date.parse(snap.syncedAt) : Infinity;
+  if (age > 60000) sync(); else flush();
+});
+setInterval(renderStatus, 30000);
+
+// desktop keyboard: N opens Add, / jumps to search, Enter saves in the modal, Esc closes the top layer
+document.addEventListener('keydown', e => {
+  if (!isPC() || e.isComposing) return;
+  const sheetOn = $('#sheet').classList.contains('on');
+  if (e.key === 'Escape') {
+    if (sheetOn) { closeSheet(); e.preventDefault(); }
+    else if (state.adding) { if (!$('#sugg').hidden) $('#sugg').hidden = true; else closeAdd(); e.preventDefault(); }
+    return;
+  }
+  if (state.adding && !sheetOn) {
+    if (e.key !== 'Enter' || e.metaKey || e.ctrlKey || e.altKey) return;
+    const t = e.target, tag = t.tagName;
+    if (tag === 'TEXTAREA' || tag === 'BUTTON' || tag === 'SELECT') return;   // buttons and pickers keep their own Enter
+    if (t.id === 'desc' && !$('#sugg').hidden) {                              // Enter takes the top suggestion
+      const b = $('#sugg button'); if (b) { e.preventDefault(); applyTemplate(derived().templates[+b.dataset.i]); $('#amt').focus(); }
+      return;
+    }
+    if (tag === 'INPUT') { e.preventDefault(); saveEntry(e.shiftKey); }
+    return;
+  }
+  if (sheetOn || e.metaKey || e.ctrlKey || e.altKey || (e.target.closest && e.target.closest('input,textarea,select,[contenteditable]'))) return;
+  if (e.key === 'n' || e.key === 'N') { e.preventDefault(); openAdd(); }
+  else if (e.key === '/') { e.preventDefault(); $('#q').focus(); }
+});
+
+/* ---------- boot ---------- */
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(reg => {
+    // iPhone home-screen apps often resume rather than relaunch, so check for a new version on every resume
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update().catch(() => {}); });
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing; if (!w) return;
+      w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) toast('Update downloaded. Close and reopen the app to use it.'); });
+    });
+  }).catch(() => {});
+}
+applyConf(store.get(LS.conf, null));
+applyLayout(true);
+if (isPC()) renderAll(); else switchTab(TITLES[state.tab] ? state.tab : 'add');
+if (!cfg) openSettings(); else sync();
+</script>
+</body>
+</html>
