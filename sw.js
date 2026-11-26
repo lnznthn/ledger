@@ -1,7 +1,7 @@
 // Ledger service worker: keeps the app's own files on the phone so it opens offline.
 // The page itself is network-first, so any launch with signal runs the newest version;
 // the cached copy is the offline fallback. Data requests to the sheet are never cached here.
-const CACHE = 'ledger-v1.12.0';
+const CACHE = 'ledger-v1.12.1';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -11,7 +11,8 @@ self.addEventListener('install', e => {
 });
 
 self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
+  // Delete only this app's old caches: the other apps on this site keep theirs.
+  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k.startsWith('ledger-') && k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });
 
 self.addEventListener('fetch', e => {

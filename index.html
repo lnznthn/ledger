@@ -23,6 +23,7 @@
   --safe-t:env(safe-area-inset-top); --safe-b:env(safe-area-inset-bottom);
   --num:ui-rounded,"SF Pro Rounded",-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
 }
+html.embed{--safe-t:0px;--safe-b:0px}
 @media (prefers-color-scheme: dark){
   :root{
     --bg:#0d1210; --card:#151c19; --ink:#e8ece9; --muted:#8b958f; --faint:#5f6964; --line:#232c28;
@@ -275,6 +276,9 @@ html.pc .sheet{top:50%;left:50%;right:auto;bottom:auto;width:min(620px,calc(100v
   transition:transform .18s ease,opacity .18s ease,visibility 0s linear .18s}
 html.pc .sheet.on{opacity:1;transform:translate(-50%,-50%);transition:transform .18s ease,opacity .18s ease}
 html.pc .sheet .grab{display:none}
+.cover{position:fixed;inset:0;z-index:60;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;background:var(--bg);text-align:center}
+/* Inside Team HQ the tab strip already names the app; the title keeps its space, so nothing moves. */
+html.embed.pc #title{visibility:hidden}
 </style>
 </head>
 <body>
@@ -361,7 +365,15 @@ html.pc .sheet .grab{display:none}
 
 <script>
 'use strict';
-const VERSION = '1.12.0';
+// Run on our own, or as a tab inside a page from this same site. Framed by any other site, stop.
+var EMBED = window.top !== window.self;
+(function () {
+  var ok = false;
+  try { for (var w = window; w !== w.top; w = w.parent) if (w.parent.location.origin !== location.origin) throw 0; ok = true; } catch (e) {}
+  if (!ok) { document.documentElement.innerHTML = ''; throw new Error('Framed by another site'); }
+  if (EMBED) document.documentElement.classList.add('embed');
+})();
+const VERSION = '1.12.1';
 const LS = { cfg: 'ledger.cfg', rows: 'ledger.rows', blocks: 'ledger.blocks', snap: 'ledger.snap', queue: 'ledger.queue', prefs: 'ledger.prefs', allocs: 'ledger.allocs', conf: 'ledger.conf' };
 const TITLES = { add: '', bal: '', act: '', rep: '' };   // tab labels (Config tab), set by applyConf
 const STALE_DAYS = 21;
@@ -369,9 +381,12 @@ const isPC = () => document.documentElement.classList.contains('pc');   // deskt
 const here = () => (isPC() ? 'this computer' : 'this phone');
 
 /* ---------- storage ---------- */
+// True while a newer copy of Ledger in this browser does the work (see the cover, above the boot lines): this copy then writes and sends nothing.
+let covered = false;
 const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
-  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { toast((isPC() ? 'Browser' : 'Phone') + ' storage is full. Clear cached data in Settings.', 'err'); return false; } },
+  // false when nothing was written: storage is full, or this copy is covered. The caller decides what to say.
+  set(k, v) { if (covered) return false; try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } },
   del(k) { try { localStorage.removeItem(k); } catch (e) {} },
 };
 store.del('ledger.cache'); // v1.0 format
@@ -381,7 +396,8 @@ let blocks = store.get(LS.blocks, {});   // { blockStartRow: hash } from the las
 let snap = store.get(LS.snap, null);     // { options, dashboard, bufferRows, syncedAt, lastRow }
 let queue = store.get(LS.queue, []);     // entries logged here and not yet confirmed by the sheet
 let prefs = Object.assign({ lastSrc: {}, lastDst: {}, tab: 'add', closed: {}, open: {} }, store.get(LS.prefs, {}));
-const saveQueue = () => { store.set(LS.queue, queue); dirty(); };
+const saveQueue = () => { const ok = store.set(LS.queue, queue); dirty(); return ok; };
+const FULL = 'Storage is full. Not saved.';
 const savePrefs = () => store.set(LS.prefs, prefs);
 
 const state = { tab: prefs.tab, type: null, syncing: false, flushing: false, flushError: false, lastError: null,
@@ -620,7 +636,7 @@ function applySync(d) {
 }
 
 async function sync() {
-  if (!cfg || state.syncing) return;
+  if (!cfg || state.syncing || covered) return;
   if (!navigator.onLine) { renderStatus(); return; }
   state.syncing = true; renderStatus();
   try {
@@ -632,7 +648,7 @@ async function sync() {
 }
 
 async function flush(fromSync) {
-  if (!cfg || state.flushing) return;
+  if (!cfg || state.flushing || covered) return;
   const pending = queue.filter(e => e.status !== 'failed');
   if (!pending.length) return;
   if (!navigator.onLine) { renderStatus(); return; }
@@ -640,6 +656,13 @@ async function flush(fromSync) {
   try {
     const data = await api('add', { entries: pending.map(({ status, error, ...e }) => e), have: blocks });
     const byId = {}; data.results.forEach(r => byId[r.id] = r);
+    if (covered) {
+      // This copy was covered while the send was under way. Only the queue is settled: re-read from storage, the confirmed
+      // entries taken out, the rejected ones marked, and written past the gate. The rest of the reply is left to the working copy.
+      const q = store.get(LS.queue, []).filter(e => { const r = byId[e.id]; if (!r) return true; if (r.ok) return false; e.status = 'failed'; e.error = r.error; return true; });
+      try { localStorage.setItem(LS.queue, JSON.stringify(q)); } catch (e) {}
+      return;
+    }
     let sent = 0, failed = 0;
     queue = queue.filter(e => {
       const r = byId[e.id]; if (!r) return true;
@@ -948,7 +971,7 @@ function openNetLiquidity() {
    with ", " in the name cell, amounts joined with "+" in the amount formula, an excluded amount written as (N*0). */
 const ALLOC_SLOTS = 4;
 let allocs = store.get(LS.allocs, { items: null, pending: false, supported: null });
-const saveAllocs = () => { store.set(LS.allocs, allocs); dirty(); };
+const saveAllocs = () => { const ok = store.set(LS.allocs, allocs); dirty(); return ok; };
 /** Split N items into ALLOC_SLOTS contiguous groups whose sizes differ by at most one, larger groups first. */
 function packAllocs(items) {
   const base = Math.floor(items.length / ALLOC_SLOTS), extra = items.length % ALLOC_SLOTS; const out = []; let i = 0;
@@ -979,7 +1002,7 @@ function allocLines(dash) {
   return allocItems(dash).map(it => ({ id: clean(it.name), name: clean(it.name), amount: it.value, on: true, legacy: true }));
 }
 async function syncAllocs() {
-  if (!cfg) return;
+  if (!cfg || covered) return;
   try {
     const slots = allocs.pending && allocs.items ? await api('setAllocs', { slots: packAllocs(allocs.items) }) : await api('getAllocs');
     allocs.items = allocsFromSlots(slots); allocs.pending = false; allocs.supported = true; saveAllocs();
@@ -995,7 +1018,12 @@ function editAlloc(id) {
     <label class="label" for="aAmt">Amount</label><input class="txt" id="aAmt" inputmode="numeric" value="${esc(a.amount === '' ? '' : String(a.amount))}" autocomplete="off">
     <label class="brow" style="border:0"><input type="checkbox" id="aOn" ${a.on ? 'checked' : ''}><div class="grow"><div class="t">Include in ${esc(FIG.short3)}</div><div class="s">Off keeps the amount but leaves it out of the total</div></div></label>
     <div class="btns"><button class="primary" id="aSave">Save</button>${a.id ? '<button class="secondary" id="aDel" style="color:var(--neg)">Remove</button>' : ''}<button class="secondary" id="closeS">Cancel</button></div>`);
-  const commit = items => { allocs.items = items; allocs.pending = true; saveAllocs(); closeSheet(); renderAll(); if (navigator.onLine) syncAllocs().then(renderAll).catch(onError); };
+  const commit = items => {
+    const was = { items: allocs.items, pending: allocs.pending };
+    allocs.items = items; allocs.pending = true;
+    if (!saveAllocs()) { Object.assign(allocs, was); dirty(); toast(FULL, 'err'); return; }
+    closeSheet(); renderAll(); if (navigator.onLine) syncAllocs().then(renderAll).catch(onError);
+  };
   $('#aSave').onclick = () => {
     const name = clean($('#aName').value).replace(/\s+/g, ' '); const amount = Number(unmoney($('#aAmt').value));
     if (!name) { toast('Add a name', 'err'); return; }
@@ -1509,9 +1537,10 @@ function openBulk() {
   $('#bClear').onclick = () => { $('#bText').value = ''; reparse(); };
   $('#bImport').onclick = () => {
     const inc = parsed.filter(r => !r.error && r.include); if (!inc.length) return;
-    const base = Date.now();
+    const base = Date.now(), had = queue.length;
     inc.forEach((r, k) => queue.push({ id: uid(), date: r.date, desc: r.desc, type: r.type, source: r.source, dest: r.dest, amount: r.amount, createdAt: base + k, status: 'pending' }));
-    saveQueue(); state.bulkText = '';
+    if (!saveQueue()) { queue.length = had; dirty(); toast(FULL, 'err'); return; }
+    state.bulkText = '';
     $('#sheet').classList.remove('on'); $('#scrim').classList.remove('on');
     toast(`${inc.length} ${inc.length === 1 ? 'row' : 'rows'} saved${navigator.onLine ? ', sending' : '. They send when you’re back online'}`);
     renderAll(); flush();
@@ -1623,8 +1652,10 @@ function openEdit(r) {
       const q = queue.find(x => x.id === r.id);
       if (!q) { closeSheet(); toast('That entry already reached the sheet. Open it from ' + TAB[3] + ' again to edit the row.', 'err'); renderAll(); return; }
       if (state.flushing) { toast('It’s being sent right now. Edit it once it reaches the sheet.', 'err'); return; }
+      const was = Object.assign({}, q);
       Object.assign(q, e, { status: 'pending' }); delete q.error;
-      saveQueue(); closeSheet(); toast('Entry updated'); renderAll(); flush(); return;
+      if (!saveQueue()) { Object.keys(q).forEach(k => delete q[k]); Object.assign(q, was); dirty(); toast(FULL, 'err'); return; }   // back to its previous values
+      closeSheet(); toast('Entry updated'); renderAll(); flush(); return;
     }
 
     if (!navigator.onLine) { note('Editing a row that’s already in the sheet needs a connection.'); return; }
@@ -1789,7 +1820,7 @@ function saveEntry(more) {
   if (!source || !dest) { toast('Pick a source and destination', 'err'); return; }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { toast('Pick a date', 'err'); return; }
   queue.push({ id: uid(), date, desc, type: state.type, source, dest, amount, createdAt: Date.now(), status: 'pending' });
-  saveQueue();
+  if (!saveQueue()) { queue.pop(); dirty(); toast(FULL, 'err'); return; }   // not stored, so not kept in memory either: no later sync sends it
   prefs.lastSrc[state.type] = source; prefs.lastDst[state.type + '|' + source] = dest; savePrefs();
   $('#amt').value = ''; $('#desc').value = '';
   toast(navigator.onLine ? 'Saved' : 'Saved on ' + here() + '. It reaches the sheet when you’re back online.');
@@ -1858,7 +1889,7 @@ setInterval(renderStatus, 30000);
 
 // desktop keyboard: N opens Add, / jumps to search, Enter saves in the modal, Esc closes the top layer
 document.addEventListener('keydown', e => {
-  if (!isPC() || e.isComposing) return;
+  if (covered || !isPC() || e.isComposing) return;
   const sheetOn = $('#sheet').classList.contains('on');
   if (e.key === 'Escape') {
     if (sheetOn) { closeSheet(); e.preventDefault(); }
@@ -1880,6 +1911,23 @@ document.addEventListener('keydown', e => {
   if (e.key === 'n' || e.key === 'N') { e.preventDefault(); openAdd(); }
   else if (e.key === '/') { e.preventDefault(); $('#q').focus(); }
 });
+
+/* ---------- one working copy per browser ----------
+   Every copy of Ledger in one browser (a tab, the installed app, the tab in Team HQ) reads its state once at boot and writes
+   it whole, so two working copies would lose or double entries. The copy opened last does the work; an older copy is covered,
+   and while covered it writes and sends nothing. "Use Ledger here" reloads the page, which reads the state again. */
+const peers = 'BroadcastChannel' in window ? new BroadcastChannel('ledger') : null;
+function cover() {
+  covered = true;
+  for (const el of document.body.children) el.inert = true;
+  const c = document.createElement('div');
+  c.className = 'cover';
+  c.innerHTML = '<p>Ledger is open in another tab or window.</p><button type="button" class="primary" style="width:auto;padding:11px 18px">Use Ledger here</button>';
+  c.querySelector('button').onclick = () => location.reload();
+  document.body.appendChild(c);
+  c.querySelector('button').focus();
+}
+if (peers) { peers.onmessage = (e) => { if (e.data === 'open' && !covered) cover(); }; peers.postMessage('open'); }
 
 /* ---------- boot ---------- */
 if ('serviceWorker' in navigator && location.protocol === 'https:') {

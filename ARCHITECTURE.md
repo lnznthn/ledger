@@ -9,7 +9,7 @@ This repository is public and served by GitHub Pages. Keep balances, account num
 | File | Role |
 | --- | --- |
 | `index.html` | The whole app: markup, CSS and one `<script>`. Version is the `VERSION` constant near the top of the script. |
-| `sw.js` | Service worker. The page is network-first (3-second budget, then the cached copy), so any launch with signal runs the newest version; icons and the manifest are cache-first. Never caches sheet data. |
+| `sw.js` | Service worker. The page is network-first (3-second budget, then the cached copy), so any launch with signal runs the newest version; icons and the manifest are cache-first. Never caches sheet data. On activation it deletes only caches whose names start with `ledger-`, because other apps are served from the same address and keep their own. |
 | `manifest.webmanifest`, `icons/` | Home-screen install metadata. |
 | `apps-script/edits.gs`, `apps-script/allocations.gs` | Two files of the sheet's script: editing a logged row, and the allocation slots. |
 
@@ -35,6 +35,12 @@ Auto mode chooses the dashboard when the media query `(hover: hover) and (pointe
 On the dashboard, `renderView()` renders all three columns, and `switchTab(t)` opens the modal for `add` and otherwise re-renders and briefly highlights that column. Keyboard: N opens the add form, / focuses the search, Enter saves in the modal (Enter on the description takes the top suggestion), Shift+Enter saves and keeps the modal open, Esc closes the top layer.
 
 Each browser keeps its own `localStorage`, so a computer is connected separately in Settings with the same connection code, and its first sync downloads the full log.
+
+### Framing and copies
+
+Ledger runs on its own or as a frame inside a page from its own site (the Ledger tab in Team HQ). A block at the top of the script walks up the frame chain: a parent from any other site, at any level, or a sandboxed frame that withholds same-site access, empties the page and stops the script before it reads storage. GitHub Pages cannot send the header that forbids framing, so this check stands in for it. Inside a same-site frame `<html>` gets the class `embed`: `--safe-t` and `--safe-b` drop to 0, because the outer page owns the notch and home-bar spacing, and the desktop title is hidden with its space kept, because the outer page already names the app.
+
+Every copy of Ledger in one browser (a tab, the installed app, the frame in Team HQ) reads its state once at boot and writes it whole, so two working copies would lose or double entries. Each copy announces itself on a `BroadcastChannel` named `ledger` when it opens. The copy opened last does the work; an older copy is covered (`covered`) by a full-page layer with a "Use Ledger here" button, and the rest of its page is `inert`. While covered, `store.set` writes nothing and returns false, and `sync`, `flush`, `syncAllocs` and the keyboard handler return at once. "Use Ledger here" reloads the page, which reads the state again and covers the other copy. One exception passes the gate: when a send was under way as the copy was covered, its reply re-reads `ledger.queue`, removes the confirmed ids, marks the rejected ones and writes the queue back; the rest of that reply is ignored, and the working copy's next sync brings it. The newer copy may send an entry that the covered copy's last send already wrote, which is safe because `Code.gs` writes each entry id once. Known limit: an entry opened with Edit from the queue is held only in the form, so covering that copy loses it.
 
 ## The sheet
 
@@ -127,6 +133,8 @@ The connection code the owner pastes is `<exec URL>#<key>`; Settings splits it. 
 | `ledger.prefs` | Last-used pickers, current tab, which cards are open or closed |
 | `ledger.allocs` | The allocation lines and whether a change is waiting to be sent |
 | `ledger.conf` | The Config tab's rows from the last sync that carried them |
+
+`store.set` returns false when nothing was written and shows no message of its own. The four paths that save something the owner entered (saving an entry, editing a queued entry, a bulk import, an allocation edit) check it: on failure they show "Storage is full. Not saved.", keep the form or sheet filled, and take the entry, rows or change back out of memory (an edited queued entry gets its previous values back), so no later sync sends what the screen said was not saved. A log copy that cannot be stored fails without a message and is downloaded again on the next sync.
 
 Entries are written to the queue first and flushed when online (`flush`). Rejected entries stay in the queue with the server's error and can be edited, retried or deleted. Bulk import parses pasted tab-separated rows (for example rows copied from the sheet), validates them against the pairs tab, flags likely duplicates (same source and amount within 7 days) and future dates, and pushes the selected rows into the same queue. The app is the only writer to the log.
 
@@ -249,3 +257,4 @@ Per-person receivables are tracked by description: for rows whose source or dest
 | 1.11.0 | Edit any logged row from `act`: queued entries in place, sheet rows through the new `editRow` action (`apps-script/edits.gs`), with a balance-effect preview |
 | 1.12.0 | Cash flow: outflow-type view, disbursements stacked by spending group, outlier rows hatched (overlay) or left out (adjusted), hover card with groups, categories and outliers; long-press on touch |
 | 1.12.0, republished | The owner's names, thresholds, currency and examples come from the sheet's Config tab (`config` in the sync reply, kept in `ledger.conf`); `edits.gs` and `allocations.gs` read their tab names and range from it; `Code.gs` writes each entry id once. |
+| 1.12.1 | Groundwork for running as a tab inside Team HQ, with nothing to see when the app runs on its own: the service worker deletes only its own old caches; the app stops when a page from another site frames it, and inside a same-site frame it gives up the notch spacing and hides its desktop title; of several copies open in one browser only the newest works. A save that fails because storage is full says so, keeps the form filled and is not sent later. |
