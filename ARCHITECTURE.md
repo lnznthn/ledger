@@ -9,8 +9,9 @@ This repository is public and served by GitHub Pages. Keep balances, account num
 | File | Role |
 | --- | --- |
 | `index.html` | The whole app: markup, CSS and one `<script>`. Version is the `VERSION` constant near the top of the script. |
-| `sw.js` | Service worker. The page is network-first (3-second budget, then the cached copy), so any launch with signal runs the newest version; icons and the manifest are cache-first. Never caches sheet data. On activation it deletes only caches whose names start with `ledger-`, because other apps are served from the same address and keep their own. |
+| `sw.js` | Service worker. The page is network-first (3-second budget, then the cached copy), so any launch with signal runs the newest version; icons, fonts and the manifest are cache-first. Never caches sheet data. On activation it deletes only caches whose names start with `ledger-`, because other apps are served from the same address and keep their own. |
 | `manifest.webmanifest`, `icons/` | Home-screen install metadata. |
+| `fonts/` | The five font files of the shared look (Inter 400, 500, 600 and 700, Space Grotesk 700), served with the app so text looks the same offline; all five are in the service worker's offline list. `fonts/README.md` names their source and `fonts/OFL.txt` holds their licence. |
 | `apps-script/edits.gs`, `apps-script/allocations.gs` | Two files of the sheet's script: editing a logged row, and the allocation slots. |
 
 The back end is a Google Apps Script web app (`Code.gs`) bound to the spreadsheet. Apart from the two files above, its source is **not** in this repo; it lives in the sheet's Apps Script project (Extensions → Apps Script), and changing it needs the owner's Google sign-in. Any change to the script is redeployed through Deploy → Manage deployments → edit → New version, which keeps the `/exec` URL; a new deployment would change it.
@@ -21,7 +22,9 @@ The back end is a Google Apps Script web app (`Code.gs`) bound to the spreadshee
 2. Bump `CACHE` in `sw.js` to the same version (`ledger-vX.Y.Z`). The browser only installs a new service worker when the bytes of `sw.js` change, so skipping this means phones keep the old app.
 3. Never commit an empty or truncated `sw.js`. Versions 1.3.1 and 1.8.0 each shipped an empty `sw.js` by accident, breaking offline launch until 1.5.2 and 1.8.1 restored it. Check `test -s sw.js && node --check sw.js` before every commit.
 4. Check the script parses, for example `node -e "const h=require('fs').readFileSync('index.html','utf8');new Function(h.slice(h.indexOf('<script>')+8,h.lastIndexOf('</script>')))"`.
-5. Commit and push to `main`. The next launch or resume with signal runs the new version.
+5. Check the shared look block (see Shared look): this prints `33c0af2999cecd8b`, the same value Team HQ's and Docket's test runs check.
+   `node -e "const h=require('fs').readFileSync('index.html','utf8'),m='/* end shared look */',a=h.indexOf('/* Shared look 1'),b=h.indexOf(m)+m.length;console.log(require('crypto').createHash('sha256').update(h.slice(a,b)).digest('hex').slice(0,16))"`
+6. Commit and push to `main`. The next launch or resume with signal runs the new version.
 
 ## Layouts
 
@@ -35,6 +38,14 @@ Auto mode chooses the dashboard when the media query `(hover: hover) and (pointe
 On the dashboard, `renderView()` renders all three columns, and `switchTab(t)` opens the modal for `add` and otherwise re-renders and briefly highlights that column. Keyboard: N opens the add form, / focuses the search, Enter saves in the modal (Enter on the description takes the top suggestion), Shift+Enter saves and keeps the modal open, Esc closes the top layer.
 
 Each browser keeps its own `localStorage`, so a computer is connected separately in Settings with the same connection code, and its first sync downloads the full log.
+
+### Shared look
+
+Ledger, Docket and Team HQ share one look. The first rules in `<style>`, from the comment `/* Shared look 1 … */` to `/* end shared look */`, are one block of identical text in all three apps: the five font declarations, the light and dark colour tokens, the type sizes (14 px text, 12 px labels, 16 px fields), the spacing steps, corner radii, tap sizes and the notch tokens `--sat` and `--sab`. Each repo keeps its own copy, and a hash keeps the copies identical: step 5 of the release checklist prints the first 16 hex characters of the block's SHA-256, markers included, and Team HQ's and Docket's test runs assert the same value. A change to the block is made in all three repos in the same round, and the hash in all three with it.
+
+A short local `:root` follows the block. It maps Ledger's own names onto the shared tokens (`--bg`, `--card`, `--chip`, `--faint`, `--in`, `--neg`, `--safe-t`, `--safe-b`) and holds the colours only Ledger uses: the chart colours `--c1` to `--c6` and the spending-group colours `--g1` to `--g8`, in both themes. Anything that belongs to Ledger alone goes there, never into the block.
+
+What the rules after it follow: the main button is a filled blue block (`--accent-fill`) and every other button has a border around a bold label; a chosen segment, chip or toggle takes the selected pair (`--sel`, `--on-sel`); the active tab is blue text with a 3 px rule; touch targets are 44 px (wrapping chips 40 px), and where the visible control is smaller a `::after` extends the area that takes the tap. `--accent` is a text and focus colour: links, the active tab, focus outlines and field focus borders. The Reports line chart and the progress bar use `--c1`, Ledger's green. `--edge` is a border colour only, so faint text maps to `--muted`. Focus is visible wherever a keyboard is in use: `:focus-visible` draws a 2 px outline, and the amount, search and in-card fields, which sit bare inside their block, show a ring inside that block.
 
 ### Framing and copies
 
@@ -228,6 +239,7 @@ Per-person receivables are tracked by description: for rows whose source or dest
 ## Conventions
 
 - Money displays in finance style: negatives in parentheses, `(1,200.00)` with the Config tab's currency sign in front, via `money()`.
+- Inter and Space Grotesk (shared look), rounded numerals for amounts: text is Inter, titles are Space Grotesk 700, and amounts use the system's rounded font with tabular digits (`--num`), because the bundled Inter subset does not cover every currency sign.
 - `TOL` comes from the Config tab's `tolerance` row: differences at or under it are treated as zero.
 - Tab order is `rep`, `bal`, `act`, `add`. On the desktop dashboard the column order is `bal`, `rep`, `act`.
 - Dates are stored as ISO `YYYY-MM-DD` on the device and written to the sheet as `MM/DD/YY`.
@@ -258,3 +270,4 @@ Per-person receivables are tracked by description: for rows whose source or dest
 | 1.12.0 | Cash flow: outflow-type view, disbursements stacked by spending group, outlier rows hatched (overlay) or left out (adjusted), hover card with groups, categories and outliers; long-press on touch |
 | 1.12.0, republished | The owner's names, thresholds, currency and examples come from the sheet's Config tab (`config` in the sync reply, kept in `ledger.conf`); `edits.gs` and `allocations.gs` read their tab names and range from it; `Code.gs` writes each entry id once. |
 | 1.12.1 | Groundwork for running as a tab inside Team HQ, with nothing to see when the app runs on its own: the service worker deletes only its own old caches; the app stops when a page from another site frames it, and inside a same-site frame it gives up the notch spacing and hides its desktop title; of several copies open in one browser only the newest works. A save that fails because storage is full says so, keeps the form filled and is not sent later. |
+| 1.13.0 | The shared look: one block of style tokens identical in Ledger, Docket and Team HQ, checked by hash (release checklist, step 5). Inter for text and Space Grotesk for titles, served from `fonts/`; text at 14 px with 12 px labels, so list rows are shorter; cards with a border and no shadow; a blue main button, bordered secondary buttons, and one selected style for segments, chips and toggles; a visible focus outline; inflow green and negative red moved a shade to pass contrast. No label, stored value or sync code changes. |

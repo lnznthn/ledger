@@ -1,8 +1,10 @@
 // Ledger service worker: keeps the app's own files on the phone so it opens offline.
 // The page itself is network-first, so any launch with signal runs the newest version;
 // the cached copy is the offline fallback. Data requests to the sheet are never cached here.
-const CACHE = 'ledger-v1.12.1';
-const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png'];
+const CACHE = 'ledger-v1.13.0';
+const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png',
+  './fonts/inter-latin-400-normal.woff2', './fonts/inter-latin-500-normal.woff2', './fonts/inter-latin-600-normal.woff2', './fonts/inter-latin-700-normal.woff2',
+  './fonts/space-grotesk-latin-700-normal.woff2'];
 
 self.addEventListener('install', e => {
   // cache: 'reload' skips the browser's HTTP cache, which GitHub Pages lets hold files for 10 minutes
